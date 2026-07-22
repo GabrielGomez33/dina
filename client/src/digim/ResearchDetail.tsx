@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { ResearchRecord } from '../lib/types';
+import { ExploreView } from './ExploreView';
 
 interface Props {
   id: string;
@@ -7,6 +9,8 @@ interface Props {
   error: Error | null;
   onRetry: () => void;
 }
+
+type Tab = 'briefing' | 'explore';
 
 function host(u: string): string {
   try {
@@ -20,6 +24,7 @@ function host(u: string): string {
 // caveats, and the sources/documents behind it. Purely presentational — the page
 // owns fetching; this renders whatever state it's handed.
 export function ResearchDetail({ record, loading, error, onRetry }: Props) {
+  const [tab, setTab] = useState<Tab>('briefing');
   if (loading) return <div className="panel muted">Loading research…</div>;
   if (error)
     return (
@@ -47,14 +52,37 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
         </div>
       </header>
 
-      {record.summary && (
+      <div className="detail-tabs" role="tablist">
+        <button
+          role="tab"
+          aria-selected={tab === 'briefing'}
+          className={'detail-tab' + (tab === 'briefing' ? ' active' : '')}
+          onClick={() => setTab('briefing')}
+        >
+          Briefing
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'explore'}
+          className={'detail-tab' + (tab === 'explore' ? ' active' : '')}
+          onClick={() => setTab('explore')}
+        >
+          Explore graph
+        </button>
+      </div>
+
+      {tab === 'explore' && (
+        <ExploreView focus={record.entities[0]?.text || record.query} />
+      )}
+
+      {tab === 'briefing' && record.summary && (
         <section className="research-section">
           <h2>Briefing</h2>
           <p className="research-summary">{record.summary}</p>
         </section>
       )}
 
-      {record.keyInsights.length > 0 && (
+      {tab === 'briefing' && record.keyInsights.length > 0 && (
         <section className="research-section">
           <h2>Key insights</h2>
           <ul className="bullets">
@@ -65,7 +93,7 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
         </section>
       )}
 
-      {record.entities.length > 0 && (
+      {tab === 'briefing' && record.entities.length > 0 && (
         <section className="research-section">
           <h2>Entities</h2>
           <div className="chips">
@@ -78,7 +106,7 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
         </section>
       )}
 
-      {record.caveats.length > 0 && (
+      {tab === 'briefing' && record.caveats.length > 0 && (
         <section className="research-section">
           <h2>Caveats</h2>
           <ul className="bullets caveats">
@@ -89,7 +117,7 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
         </section>
       )}
 
-      {(record.documents?.length || record.sources.length) > 0 && (
+      {tab === 'briefing' && (record.documents?.length || record.sources.length) > 0 && (
         <section className="research-section">
           <h2>Sources</h2>
           <div className="sources">
