@@ -105,6 +105,16 @@
 .run-busy, .run-result { margin-top: 16px; }
 .run-result h2 { font: 700 12px/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-dim); margin: 0 0 10px; }
 
+/* ---- research detail tabs + explore embed ---- */
+.detail-tabs { display: flex; gap: 4px; margin: 18px 0 4px; border-bottom: 1px solid var(--line); }
+.detail-tab { font: 600 12px/1 var(--font-ui); color: var(--ink-dim); background: none; border: 0;
+  border-bottom: 2px solid transparent; padding: 9px 12px; cursor: pointer; }
+.detail-tab:hover { color: var(--ink); }
+.detail-tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+.explore { margin-top: 14px; }
+.explore-frame { width: 100%; height: min(72vh, 760px); border: 1px solid var(--line);
+  border-radius: var(--radius); background: var(--panel); display: block; }
+
 /* ---- spinner ---- */
 .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--line); border-top-color: var(--accent);
   border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: -2px; margin-right: 6px; }
