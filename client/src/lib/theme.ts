@@ -19,7 +19,9 @@ export function applyTheme(theme: Theme): void {
 }
 
 export function initTheme(): Theme {
-  const t = getStoredTheme() ?? systemTheme();
+  // Dark is DINA's signature look — default to it unless the user explicitly
+  // chose light before. (We intentionally don't follow the OS preference.)
+  const t = getStoredTheme() ?? 'dark';
   document.documentElement.setAttribute('data-theme', t);
   return t;
 }
