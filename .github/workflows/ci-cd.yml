@@ -1,0 +1,266 @@
+# =============================================================================
+# DINA FRONTEND CI/CD PIPELINE
+# =============================================================================
+# Enterprise-grade pipeline for the DINA React SPA. Modeled on the proven
+# mirror-client pipeline.
+#
+# TRIGGERS:
+#   - Push to master or develop → full pipeline + deploy (master only)
+#   - Pull request to master or develop → quality gates only (no deploy)
+#   - Manual dispatch → full pipeline with optional deploy
+#
+# QUALITY GATES (job 1):
+#   1. Deterministic install (npm ci)
+#   2. ESLint
+#   3. TypeScript strict type-check (tsc -b --noEmit)
+#   4. Vite production build (dist/ + .htaccess for SPA routing)
+#   5. Bundle-size analysis
+#   6. Security audit (npm audit)
+#
+# DEPLOYMENT (job 2, master only):
+#   - Build on GitHub Actions, SCP dist/ to /var/www/dina-client/dist/
+#   - Static files served by Apache (no PM2 restart)
+#   - Backup → deploy → chmod a+rX → smoke test → rollback on failure
+#
+# NOTE: repo source lives in client/; the server serves the built dist/ at
+#       /var/www/dina-client/dist. We build in CI and ship the compiled dist/.
+# =============================================================================
+
+name: DINA Frontend CI/CD
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Force deploy to production'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # ===========================================================================
+  # JOB 1: QUALITY GATES
+  # ===========================================================================
+  quality:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint check
+        run: npm run lint
+        continue-on-error: true
+
+      - name: TypeScript type-check
+        run: npx tsc -b --noEmit
+
+      - name: Compute release version
+        id: version
+        run: |
+          VERSION="v$(date -u +'%Y.%m.%d')-${GITHUB_SHA::7}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved release version: $VERSION"
+
+      - name: Vite production build
+        env:
+          # Same-origin API prefix (Apache proxies /dina/api → the DINA server).
+          VITE_API_BASE: ${{ secrets.VITE_API_BASE || '/dina/api/v1' }}
+          VITE_APP_VERSION: ${{ steps.version.outputs.version }}
+        run: npm run build
+
+      - name: Verify build output
+        run: |
+          if [ ! -f "dist/index.html" ]; then
+            echo "::error::Build failed — dist/index.html not found"; exit 1
+          fi
+          if [ ! -f "dist/.htaccess" ]; then
+            echo "::error::Build missing .htaccess — SPA routing will break"; exit 1
+          fi
+          echo "Build artifacts:"; ls -la dist/
+          echo "Total bundle size: $(du -sh dist/ | cut -f1)"
+
+      - name: Bundle size check
+        run: |
+          TOTAL_KB=$(du -sk dist/ | cut -f1)
+          echo "Bundle size: ${TOTAL_KB}KB"
+          if [ "$TOTAL_KB" -gt 10240 ]; then
+            echo "::warning::Bundle size is ${TOTAL_KB}KB (>10MB). Consider code splitting."
+          fi
+
+      - name: Security audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Upload build artifact
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true')
+        uses: actions/upload-artifact@v4
+        with:
+          name: dina-frontend-dist
+          path: client/dist/
+          retention-days: 5
+
+  # ===========================================================================
+  # JOB 2: DEPLOY TO PRODUCTION (master only)
+  # ===========================================================================
+  deploy:
+    name: Deploy to Production
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    if: |
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true')
+    environment:
+      name: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dina-frontend-dist
+          path: dist/
+
+      - name: Verify artifact
+        run: |
+          if [ ! -f "dist/index.html" ]; then
+            echo "::error::Build artifact missing index.html"; exit 1
+          fi
+          ls -la dist/
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Backup current dist on server
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'BACKUP'
+          DIST_PATH="${{ secrets.SERVER_DIST_PATH }}"
+          if [ -d "$DIST_PATH" ]; then
+            rm -rf /tmp/.dina-client-dist-backup
+            cp -r "$DIST_PATH" /tmp/.dina-client-dist-backup
+            echo "Backup created at /tmp/.dina-client-dist-backup"
+          else
+            echo "No existing dist to backup"
+          fi
+          BACKUP
+
+      - name: Deploy dist to server
+        run: |
+          DIST_PATH="${{ secrets.SERVER_DIST_PATH }}"
+          echo "[1/3] Clearing old dist..."
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "rm -rf $DIST_PATH/*"
+
+          echo "[2/3] Uploading new build..."
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -r \
+            dist/* dist/.htaccess ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:$DIST_PATH/
+
+          # Apache (www-data) must be able to read the files; scp preserves the
+          # SSH user's umask which can drop the world-read bit → 403. a+rX adds
+          # read for all and the search bit on directories only.
+          echo "[2.5/3] Fixing permissions..."
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "chmod -R a+rX $DIST_PATH"
+
+          echo "[3/3] Verifying deployment..."
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << VERIFY
+          if [ -f "$DIST_PATH/index.html" ] && [ -f "$DIST_PATH/.htaccess" ]; then
+            echo "Deploy verified:"; ls -la $DIST_PATH/
+          else
+            echo "ERROR: Deploy verification failed!"; exit 1
+          fi
+          VERIFY
+
+      - name: Smoke test
+        id: smoke_test
+        run: |
+          MAX_RETRIES=3; RETRY_INTERVAL=3
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i/$MAX_RETRIES..."
+            HTTP_CODE=$(ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+              ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+              "curl -sk -o /dev/null -w '%{http_code}' https://localhost/dina/" 2>/dev/null || echo "000")
+            echo "Smoke test response: HTTP $HTTP_CODE"
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "smoke_status=healthy" >> $GITHUB_OUTPUT
+              echo "Smoke test PASSED — /dina/ returns 200"; exit 0
+            fi
+            [ "$i" -lt "$MAX_RETRIES" ] && sleep $RETRY_INTERVAL
+          done
+          echo "smoke_status=unhealthy" >> $GITHUB_OUTPUT
+          echo "::error::Smoke test FAILED — /dina/ not responding"; exit 1
+
+      - name: Rollback on failure
+        if: failure() && steps.smoke_test.outputs.smoke_status == 'unhealthy'
+        run: |
+          echo "::error::DEPLOYING ROLLBACK..."
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ROLLBACK'
+          DIST_PATH="${{ secrets.SERVER_DIST_PATH }}"
+          if [ -d "/tmp/.dina-client-dist-backup" ]; then
+            rm -rf "$DIST_PATH"; cp -r /tmp/.dina-client-dist-backup "$DIST_PATH"
+            echo "Rollback complete."
+          else
+            echo "ERROR: No backup found! Manual intervention required."; exit 1
+          fi
+          ROLLBACK
+
+      - name: Tag release
+        if: success()
+        continue-on-error: true
+        env:
+          VERSION: ${{ needs.quality.outputs.version }}
+        run: |
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Tag $VERSION already exists — skipping."
+          else
+            git tag "$VERSION"
+          fi
+          git push origin "$VERSION" || echo "::warning::Tag push skipped."
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

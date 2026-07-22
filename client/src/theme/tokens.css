@@ -1,0 +1,82 @@
+/* ============================================================================
+   DINA — design tokens (intelligence-console aesthetic, shared with DIGIM)
+   Light + dark, driven by the viewer's theme toggle (data-theme) and the OS
+   preference. Style through tokens; never hard-code colors in components.
+   ============================================================================ */
+
+:root {
+  --bg: #f5f7fa;
+  --panel: #ffffff;
+  --panel-2: #eef1f6;
+  --line: #d7dee8;
+  --ink: #17212e;
+  --ink-dim: #5c6b7d;
+  --accent: #0e8ea3;
+  --accent-soft: #d4edf1;
+  --edge: #8aa0b3;
+
+  /* entity-type palette (matches the DIGIM graph viewer) */
+  --t-person: #2f6ae0;
+  --t-organization: #9a54c9;
+  --t-location: #2aa17e;
+  --t-event: #d0872e;
+  --t-technology: #4a63d6;
+  --t-concept: #6b7b8c;
+  --t-other: #6b7b8c;
+
+  /* semantic status colors (separate from the accent) */
+  --ok: #2aa17e;
+  --warn: #d0872e;
+  --crit: #d1495b;
+
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
+  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --shadow: 0 1px 3px rgba(20, 30, 45, 0.08), 0 6px 24px rgba(20, 30, 45, 0.06);
+  --radius: 10px;
+  --fog: 245, 247, 250;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1017;
+    --panel: #121a24;
+    --panel-2: #0f161f;
+    --line: #1f2c3a;
+    --ink: #e6edf5;
+    --ink-dim: #8797a8;
+    --accent: #2bb6cd;
+    --accent-soft: #12303a;
+    --edge: #3a4d60;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 8px 30px rgba(0, 0, 0, 0.35);
+    --fog: 11, 16, 23;
+  }
+}
+
+/* Explicit theme override wins over the media query, in both directions. */
+:root[data-theme='light'] {
+  --bg: #f5f7fa; --panel: #ffffff; --panel-2: #eef1f6; --line: #d7dee8;
+  --ink: #17212e; --ink-dim: #5c6b7d; --accent: #0e8ea3; --accent-soft: #d4edf1;
+  --edge: #8aa0b3; --shadow: 0 1px 3px rgba(20,30,45,.08), 0 6px 24px rgba(20,30,45,.06);
+  --fog: 245, 247, 250;
+}
+:root[data-theme='dark'] {
+  --bg: #0b1017; --panel: #121a24; --panel-2: #0f161f; --line: #1f2c3a;
+  --ink: #e6edf5; --ink-dim: #8797a8; --accent: #2bb6cd; --accent-soft: #12303a;
+  --edge: #3a4d60; --shadow: 0 1px 3px rgba(0,0,0,.4), 0 8px 30px rgba(0,0,0,.35);
+  --fog: 11, 16, 23;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
