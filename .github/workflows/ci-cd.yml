@@ -221,11 +221,18 @@ jobs:
         id: smoke_test
         run: |
           MAX_RETRIES=3; RETRY_INTERVAL=3
+          # Apache has several :443 vhosts; an unknown SNI like "localhost" hits
+          # the apex-redirect (default) vhost and 301s to www — a false negative.
+          # --resolve maps the CANONICAL host to loopback so the SNI/Host select
+          # the app vhost (ServerName www...) and we get a real 200, still on
+          # 127.0.0.1 (no public DNS round-trip). Matches mirror-client.
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i/$MAX_RETRIES..."
             HTTP_CODE=$(ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
               ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-              "curl -sk -o /dev/null -w '%{http_code}' https://localhost/dina/" 2>/dev/null || echo "000")
+              "curl -s -o /dev/null -w '%{http_code}' \
+                --resolve www.theundergroundrailroad.world:443:127.0.0.1 \
+                https://www.theundergroundrailroad.world/dina/" 2>/dev/null || echo "000")
             echo "Smoke test response: HTTP $HTTP_CODE"
             if [ "$HTTP_CODE" = "200" ]; then
               echo "smoke_status=healthy" >> $GITHUB_OUTPUT
