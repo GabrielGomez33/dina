@@ -1,31 +1,31 @@
 /* ============================================================================
    DINA — design tokens.  See DESIGN.md for the contract.
-   Dark is the default/signature look; light is a first-class alternative.
-   Style components THROUGH these tokens — never hard-code a hex.
+   Layered charcoal surfaces, a quiet warm-gold accent, monochrome discipline.
+   Colour is reserved for the graphs; the rest of the UI stays greyscale + gold.
    ============================================================================ */
 
 :root {
-  /* layered blacks — depth from elevation, never one flat #000 */
-  --bg: #0a0b0e;
-  --panel: #14171d;
-  --panel-2: #1b1f27;
-  --panel-3: #232833;
-  --line: #272d38;
-  --line-soft: #1e232c;
+  /* layered WARM charcoals — depth from elevation, never flat black */
+  --bg: #191817;
+  --panel: #211f1d;
+  --panel-2: #292724;
+  --panel-3: #33302c;
+  --line: #3a3733;
+  --line-soft: #292724;
 
-  /* greys — off-white on black, not pure #fff */
-  --ink: #eef1f6;
-  --ink-dim: #9aa5b3;
-  --ink-faint: #697382;
+  /* greys — warm off-white on charcoal, never pure #fff */
+  --ink: #efece7;
+  --ink-dim: #a29c92;
+  --ink-faint: #726c63;
 
-  /* one pastel accent + a rare warm secondary */
-  --accent: #6fe0cf;
-  --accent-2: #f2c79b;
-  --accent-rgb: 111, 224, 207;
-  --accent-soft: rgba(111, 224, 207, 0.12);
-  --accent-line: rgba(111, 224, 207, 0.32);
+  /* one warm-gold accent, doing QUIET work — hairlines + outlines, not fills */
+  --accent: #c9a25a;
+  --accent-2: #b1863f;
+  --accent-rgb: 201, 162, 90;
+  --accent-soft: rgba(201, 162, 90, 0.08);
+  --accent-line: rgba(201, 162, 90, 0.55);
 
-  /* pastel type palette (entities / categories) */
+  /* graph-only colour palette (used by the graph viewer, not the UI chrome) */
   --t-person: #8fb3ff;
   --t-organization: #c4a7f0;
   --t-location: #78e3c4;
@@ -34,43 +34,43 @@
   --t-concept: #9aa7b8;
   --t-other: #9aa7b8;
 
-  /* semantic status — separate from the accent */
-  --ok: #5fd0a8;
-  --warn: #f2c07f;
-  --crit: #f38ba0;
+  /* semantic status — separate from the accent, used sparingly */
+  --ok: #7fc9a0;
+  --warn: #d8b26a;
+  --crit: #d98a86;
 
   /* type */
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Menlo', 'Consolas', monospace;
   --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 
-  /* depth: rounded + soft ambient shadow + accent glow */
+  /* depth: soft-rounded + ambient shadow + a quiet gold glow */
   --radius: 12px;
   --radius-lg: 16px;
   --radius-sm: 8px;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.38);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 30px rgba(0, 0, 0, 0.36);
   --shadow-lg: 0 2px 6px rgba(0, 0, 0, 0.45), 0 24px 60px rgba(0, 0, 0, 0.5);
-  --glow: 0 0 0 1px var(--accent-line), 0 6px 26px rgba(var(--accent-rgb), 0.16);
-  --fog: 10, 11, 14;
+  --glow: 0 0 0 1px var(--accent-line), 0 6px 24px rgba(var(--accent-rgb), 0.14);
+  --fog: 22, 23, 26;
 }
 
-/* Light — clean, airy counterpart. Only tokens change; components are unaware. */
+/* Light — warm paper counterpart. Only tokens change; components are unaware. */
 :root[data-theme='light'] {
-  --bg: #f4f5f8;
+  --bg: #f4f3ef;
   --panel: #ffffff;
-  --panel-2: #eef1f5;
-  --panel-3: #e6eaf0;
-  --line: #e1e6ec;
-  --line-soft: #edf0f4;
+  --panel-2: #f0efe9;
+  --panel-3: #e8e6df;
+  --line: #e3e1d9;
+  --line-soft: #eeece5;
 
-  --ink: #131720;
-  --ink-dim: #5c6775;
-  --ink-faint: #8a95a3;
+  --ink: #1c1b18;
+  --ink-dim: #5f5d56;
+  --ink-faint: #8b887f;
 
-  --accent: #12a594;
-  --accent-2: #c98a4e;
-  --accent-rgb: 18, 165, 148;
-  --accent-soft: rgba(18, 165, 148, 0.1);
-  --accent-line: rgba(18, 165, 148, 0.3);
+  --accent: #a97e2e;
+  --accent-2: #916a24;
+  --accent-rgb: 169, 126, 46;
+  --accent-soft: rgba(169, 126, 46, 0.1);
+  --accent-line: rgba(169, 126, 46, 0.3);
 
   --t-person: #2f6ae0;
   --t-organization: #9a54c9;
@@ -80,10 +80,10 @@
   --t-concept: #6b7b8c;
   --t-other: #6b7b8c;
 
-  --shadow: 0 1px 3px rgba(20, 30, 45, 0.08), 0 10px 30px rgba(20, 30, 45, 0.07);
-  --shadow-lg: 0 2px 6px rgba(20, 30, 45, 0.1), 0 24px 60px rgba(20, 30, 45, 0.12);
-  --glow: 0 0 0 1px var(--accent-line), 0 6px 22px rgba(var(--accent-rgb), 0.14);
-  --fog: 244, 245, 248;
+  --shadow: 0 1px 3px rgba(30, 25, 15, 0.07), 0 10px 30px rgba(30, 25, 15, 0.06);
+  --shadow-lg: 0 2px 6px rgba(30, 25, 15, 0.09), 0 24px 60px rgba(30, 25, 15, 0.1);
+  --glow: 0 0 0 1px var(--accent-line), 0 6px 22px rgba(var(--accent-rgb), 0.13);
+  --fog: 244, 243, 239;
 }
 
 * { box-sizing: border-box; }
@@ -98,16 +98,16 @@ body {
 }
 a { color: var(--accent); text-decoration: none; }
 
-/* Keyboard focus always lifts with an accent glow ring. */
+/* Keyboard focus lifts with a quiet gold glow ring. */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line), 0 0 18px rgba(var(--accent-rgb), 0.35);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-line), 0 0 16px rgba(var(--accent-rgb), 0.3);
   border-radius: var(--radius-sm);
 }
 
-::selection { background: rgba(var(--accent-rgb), 0.28); color: var(--ink); }
+::selection { background: rgba(var(--accent-rgb), 0.26); color: var(--ink); }
 
-/* Thin, unobtrusive scrollbars that match the canvas. */
+/* Thin, unobtrusive scrollbars that match the charcoal canvas. */
 * { scrollbar-width: thin; scrollbar-color: var(--panel-3) transparent; }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-thumb { background: var(--panel-3); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }

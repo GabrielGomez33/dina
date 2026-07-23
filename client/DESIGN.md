@@ -6,14 +6,19 @@ improvise per page.
 
 ## Direction
 
-**White on black. Sleek, spacious, professional, intuitive.** A near-black,
-layered canvas with soft grey text, one pastel accent that glows, generous
-whitespace, rounded corners, and depth from subtle shadows + hairline borders.
-Think high-end product minimalism (dark studio photography, monochrome UI with a
-single warm/pastel highlight) — not a busy dashboard.
+**Layered warm-charcoal surfaces, a warm gold accent doing quiet work,
+monochrome discipline, generous negative space, soft-rounded cards with hairline
+borders.** Think high-end product minimalism — dark studio photography, a
+strictly greyscale UI where the *only* colour is a thin gold hairline or an
+outlined gold control. Controls are outlined (transparent + hairline), not
+filled. Bold tight display headings; small letter-spaced caps for labels.
 
-Dark is the **default and signature** look; a clean light theme is the
-secondary, fully-supported alternative.
+**Colour is reserved for the graphs.** The relationship/semantic visualizations
+keep their colourful entity palette; everything else — chips, badges, nav,
+buttons — stays monochrome charcoal + grey, with gold used sparingly.
+
+Dark is the **default and signature** look; a clean warm-paper light theme is
+the secondary, fully-supported alternative.
 
 ## Principles
 
