@@ -129,6 +129,9 @@ jobs:
           name: dina-frontend-dist
           path: client/dist/
           retention-days: 5
+          # actions/upload-artifact@v4 EXCLUDES dotfiles by default, which drops
+          # dist/.htaccess (SPA routing) → the deploy scp then fails. Keep it.
+          include-hidden-files: true
 
   # ===========================================================================
   # JOB 2: DEPLOY TO PRODUCTION (master only)
