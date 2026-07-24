@@ -39,6 +39,10 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
   if (!record) return <div className="panel muted">Research not found.</div>;
 
   const conf = Math.round((record.confidence || 0) * 100);
+  const canExplore = record.entities.length > 0;
+  // Guard against a stale 'explore' selection when moving to an entity-less
+  // research (Explore tab is hidden then, so fall back to the briefing).
+  const activeTab: Tab = canExplore ? tab : 'briefing';
   return (
     <article className="research">
       <header className="research-head">
@@ -55,34 +59,36 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
       <div className="detail-tabs" role="tablist">
         <button
           role="tab"
-          aria-selected={tab === 'briefing'}
-          className={'detail-tab' + (tab === 'briefing' ? ' active' : '')}
+          aria-selected={activeTab === 'briefing'}
+          className={'detail-tab' + (activeTab === 'briefing' ? ' active' : '')}
           onClick={() => setTab('briefing')}
         >
           Briefing
         </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'explore'}
-          className={'detail-tab' + (tab === 'explore' ? ' active' : '')}
-          onClick={() => setTab('explore')}
-        >
-          Explore graph
-        </button>
+        {/* Only offer Explore when this research produced entities — otherwise the
+            graph focus would fall back to unrelated stored data. */}
+        {canExplore && (
+          <button
+            role="tab"
+            aria-selected={activeTab === 'explore'}
+            className={'detail-tab' + (activeTab === 'explore' ? ' active' : '')}
+            onClick={() => setTab('explore')}
+          >
+            Explore graph
+          </button>
+        )}
       </div>
 
-      {tab === 'explore' && (
-        <ExploreView focus={record.entities[0]?.text || record.query} />
-      )}
+      {activeTab === 'explore' && canExplore && <ExploreView focus={record.entities[0].text} />}
 
-      {tab === 'briefing' && record.summary && (
+      {activeTab === 'briefing' && record.summary && (
         <section className="research-section">
           <h2>Briefing</h2>
           <p className="research-summary">{record.summary}</p>
         </section>
       )}
 
-      {tab === 'briefing' && record.keyInsights.length > 0 && (
+      {activeTab === 'briefing' && record.keyInsights.length > 0 && (
         <section className="research-section">
           <h2>Key insights</h2>
           <ul className="bullets">
@@ -93,7 +99,7 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
         </section>
       )}
 
-      {tab === 'briefing' && record.entities.length > 0 && (
+      {activeTab === 'briefing' && record.entities.length > 0 && (
         <section className="research-section">
           <h2>Entities</h2>
           <div className="chips">
@@ -106,7 +112,7 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
         </section>
       )}
 
-      {tab === 'briefing' && record.caveats.length > 0 && (
+      {activeTab === 'briefing' && record.caveats.length > 0 && (
         <section className="research-section">
           <h2>Caveats</h2>
           <ul className="bullets caveats">
@@ -117,7 +123,7 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
         </section>
       )}
 
-      {tab === 'briefing' && (record.documents?.length || record.sources.length) > 0 && (
+      {activeTab === 'briefing' && (record.documents?.length || record.sources.length) > 0 && (
         <section className="research-section">
           <h2>Sources</h2>
           <div className="sources">

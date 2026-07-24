@@ -7,11 +7,16 @@
 // place to harden.
 
 import { API_BASE, DEFAULT_TIMEOUT_MS, LLM_TIMEOUT_MS } from './apiConfig';
+import { authStore } from './authStore';
 import type {
+  AuthSession,
+  AuthUser,
   GraphResult,
   HistoryPage,
   IntelligenceLevel,
+  LoginInput,
   NodeInsight,
+  RegisterInput,
   ResearchRecord,
   ResearchRunResult,
   SemanticResult,
@@ -39,6 +44,10 @@ interface RequestOptions {
   timeoutMs?: number;
   /** Caller-owned signal (e.g. React cleanup) composed with the timeout. */
   signal?: AbortSignal;
+  /** Skip attaching the bearer token (login/register/refresh/public flows). */
+  skipAuth?: boolean;
+  /** Internal: prevents infinite 401→refresh→retry loops. */
+  _isRetry?: boolean;
 }
 
 function buildUrl(path: string, query?: RequestOptions['query']): string {
@@ -71,16 +80,23 @@ function withTimeout(timeoutMs: number, external?: AbortSignal): { signal: Abort
 }
 
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, query, timeoutMs = DEFAULT_TIMEOUT_MS, signal } = opts;
+  const { method = 'GET', body, query, timeoutMs = DEFAULT_TIMEOUT_MS, signal, skipAuth, _isRetry } = opts;
   const { signal: composed, done } = withTimeout(timeoutMs, signal);
+
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (!skipAuth) {
+    const token = authStore.getAccessToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
 
   let res: Response;
   try {
     res = await fetch(buildUrl(path, query), {
       method,
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
-      credentials: 'include', // carry the auth cookie/session
+      credentials: 'include', // harmless; bearer token is the primary auth
       signal: composed,
     });
   } catch (err) {
@@ -91,6 +107,15 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     throw new ApiError('Network error — could not reach the DINA API', 0, err);
   }
   done();
+
+  // Access token expired → transparently refresh ONCE and replay the request.
+  // Guarded so the refresh call itself (skipAuth) and an already-retried request
+  // can't recurse. If refresh fails, the session is dead → clear + surface 401.
+  if (res.status === 401 && !skipAuth && !_isRetry && authStore.getRefreshToken()) {
+    const refreshed = await tryRefresh();
+    if (refreshed) return request<T>(path, { ...opts, _isRetry: true });
+    authStore.clear();
+  }
 
   const text = await res.text();
   let data: unknown = undefined;
@@ -121,6 +146,85 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
 
   return data as T;
 }
+
+// A single in-flight refresh shared by all concurrent 401s, so a burst of
+// requests hitting an expired token triggers exactly one /auth/refresh.
+let refreshInFlight: Promise<boolean> | null = null;
+
+function tryRefresh(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+  const refreshToken = authStore.getRefreshToken();
+  if (!refreshToken) return Promise.resolve(false);
+  refreshInFlight = (async () => {
+    try {
+      const data = await request<{ accessToken: string }>('/auth/refresh', {
+        method: 'POST',
+        body: { refreshToken },
+        skipAuth: true,
+      });
+      if (data?.accessToken) {
+        authStore.setAccessToken(data.accessToken);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+  return refreshInFlight;
+}
+
+// ---------------------------------------------------------------------------
+// Auth methods — user identity for the DINA console (see src/modules/auth).
+// ---------------------------------------------------------------------------
+export const auth = {
+  register(input: RegisterInput, signal?: AbortSignal): Promise<AuthSession> {
+    return request<AuthSession>('/auth/register', { method: 'POST', body: input, skipAuth: true, signal });
+  },
+  login(input: LoginInput, signal?: AbortSignal): Promise<AuthSession> {
+    return request<AuthSession>('/auth/login', { method: 'POST', body: input, skipAuth: true, signal });
+  },
+  /** Fetch the current user (validates the access token + live session). */
+  me(signal?: AbortSignal): Promise<{ user: AuthUser }> {
+    return request<{ user: AuthUser }>('/auth/me', { signal });
+  },
+  logout(signal?: AbortSignal): Promise<{ message: string }> {
+    return request('/auth/logout', { method: 'POST', signal });
+  },
+  logoutAll(signal?: AbortSignal): Promise<{ message: string }> {
+    return request('/auth/logout-all', { method: 'POST', signal });
+  },
+  checkUsername(username: string, signal?: AbortSignal): Promise<{ available: boolean; reason?: string }> {
+    return request('/auth/check-username', { query: { username }, skipAuth: true, signal });
+  },
+  verifyEmail(token: string, signal?: AbortSignal): Promise<{ message: string }> {
+    return request('/auth/verify-email', { method: 'POST', body: { token }, skipAuth: true, signal });
+  },
+  resendVerification(signal?: AbortSignal): Promise<{ message: string }> {
+    return request('/auth/resend-verification', { method: 'POST', signal });
+  },
+  forgotPassword(email: string, signal?: AbortSignal): Promise<{ message: string }> {
+    return request('/auth/forgot-password', { method: 'POST', body: { email }, skipAuth: true, signal });
+  },
+  resetPassword(token: string, password: string, signal?: AbortSignal): Promise<{ message: string }> {
+    return request('/auth/reset-password', { method: 'POST', body: { token, password }, skipAuth: true, signal });
+  },
+  changePassword(
+    currentPassword: string,
+    newPassword: string,
+    signal?: AbortSignal,
+  ): Promise<{ message: string; accessToken: string; refreshToken: string }> {
+    return request('/auth/change-password', { method: 'POST', body: { currentPassword, newPassword }, signal });
+  },
+  changeEmail(newEmail: string, currentPassword: string, signal?: AbortSignal): Promise<{ message: string }> {
+    return request('/auth/change-email', { method: 'POST', body: { newEmail, currentPassword }, signal });
+  },
+  confirmEmailChange(token: string, signal?: AbortSignal): Promise<{ message: string }> {
+    return request('/auth/confirm-email-change', { method: 'POST', body: { token }, skipAuth: true, signal });
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Capability methods — one thin, typed wrapper per API.md endpoint.

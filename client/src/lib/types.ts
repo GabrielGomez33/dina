@@ -97,6 +97,7 @@ export interface NodeInsight {
 }
 
 export interface ResearchRunResult {
+  intelligence_id?: string;
   answer?: string;
   summary?: string;
   basis?: string;
@@ -108,3 +109,33 @@ export interface ResearchRunResult {
 }
 
 export type IntelligenceLevel = 'surface' | 'deep' | 'predictive';
+
+// ============================================================================
+// Auth (mirror of src/modules/auth on the server)
+// ============================================================================
+
+export interface AuthUser {
+  id: string; // UUID
+  username: string;
+  email: string;
+  role: string;
+  emailVerified: boolean;
+}
+
+export interface AuthSession {
+  message: string;
+  user: AuthUser;
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface RegisterInput {
+  username: string;
+  email: string;
+  password: string;
+}
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
