@@ -53,8 +53,10 @@ export function DigimPage() {
       <section className="digim-main">
         {mode === 'new' ? (
           <RunResearch
-            onComplete={() => {
+            onComplete={(res) => {
               refreshHistory();
+              // Show the finished research immediately (no manual refresh needed).
+              if (res.intelligence_id) navigate(`/digim/${res.intelligence_id}`);
             }}
           />
         ) : (

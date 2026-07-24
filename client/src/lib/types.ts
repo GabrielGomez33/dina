@@ -97,6 +97,7 @@ export interface NodeInsight {
 }
 
 export interface ResearchRunResult {
+  intelligence_id?: string;
   answer?: string;
   summary?: string;
   basis?: string;

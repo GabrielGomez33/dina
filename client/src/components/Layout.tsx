@@ -27,7 +27,7 @@ export function Layout() {
         <ul className="rail-nav">
           <li>
             <NavLink to="/" end className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}>
-              <span className="nav-glyph">⌂</span> Overview
+              <span className="nav-glyph">⌂</span> <span className="nav-label">Overview</span>
             </NavLink>
           </li>
           {MODULES.map((m) => (
@@ -36,9 +36,11 @@ export function Layout() {
                 to={m.path}
                 className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
                 aria-disabled={m.status === 'planned'}
+                title={m.label}
                 onClick={(e) => m.status === 'planned' && e.preventDefault()}
               >
-                <span className="nav-glyph">{m.glyph}</span> {m.label}
+                <span className="nav-glyph">{m.glyph}</span>
+                <span className="nav-label">{m.label}</span>
                 {m.status === 'planned' && <span className="soon">soon</span>}
               </NavLink>
             </li>
