@@ -126,6 +126,10 @@
   .api-row span { font-weight: 400; }
   .api-row input { font: 500 12px/1.4 var(--font-mono); color: var(--ink); background: var(--panel-2);
     border: 1px solid var(--line); border-radius: 7px; padding: 8px 9px; }
+  .emptymsg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+    padding: 0 32px; z-index: 2; pointer-events: none; color: var(--ink-dim);
+    font: 500 13px/1.6 var(--font-ui); }
+  .emptymsg[hidden] { display: none; }
   #sample-badge { align-self: center; font: 700 9px/1 var(--font-mono); letter-spacing: .08em;
     color: var(--t-event); background: color-mix(in srgb, var(--t-event) 15%, transparent);
     border: 1px solid color-mix(in srgb, var(--t-event) 45%, transparent); padding: 5px 7px; border-radius: 6px; }
@@ -158,7 +162,6 @@
     <button class="tab" role="tab" id="tab-semantic" aria-selected="false">Semantic</button>
   </div>
   <div class="stats">
-    <span id="sample-badge" hidden title="Built-in demo data — click Load data to replace with real digim output">SAMPLE DATA</span>
     <div class="stat"><b id="s-nodes">0</b><span id="s-nodes-lbl">Entities</span></div>
     <div class="stat"><b id="s-edges">0</b><span id="s-edges-lbl">Relations</span></div>
     <button class="iconbtn" id="spin-btn" aria-pressed="true" title="Toggle auto-rotate">⟳</button>
@@ -171,6 +174,7 @@
   <div class="stage">
     <div class="focuswrap"><input id="focus" type="search" placeholder="highlight entity…" aria-label="Highlight entity" autocomplete="off" /></div>
     <canvas id="cv"></canvas>
+    <div class="emptymsg" id="emptymsg" hidden></div>
     <div class="hint" id="hint">drag to orbit · scroll to zoom · click a node</div>
   </div>
   <aside>
@@ -201,58 +205,18 @@
     <div class="err" id="json-err"></div>
     <label class="api-row">API base <span>(for live "Generate insight"; blank = same origin)</span>
       <input id="api-base" type="text" spellcheck="false" placeholder="https://your-host/dina/api/v1"></label>
-    <div class="modal-f"><button class="btn" id="json-sample">Reset to sample</button><button class="btn primary" id="json-load">Load</button></div>
+    <div class="modal-f"><button class="btn primary" id="json-load">Load</button></div>
   </div>
 </dialog>
 
 <script>
 "use strict";
-// Post-polish sample: generic/indefinite entities ("three vessels", "a container
-// ship") are dropped at extraction (isLowValueEntity), and same-meaning predicates
-// collapse so corroboration accumulates instead of splintering into 1-count edges.
-const SAMPLE = {
-  suggested_view: "network", sample: true,
-  nodes: [
-    { name: "Iran", type: "location", occurred_at: null, weight: 8 },
-    { name: "United States", type: "organization", occurred_at: null, weight: 5 },
-    { name: "Strait of Hormuz", type: "location", occurred_at: null, weight: 3 },
-    { name: "Qatari-flagged vessel al-Rakiyat", type: "other", occurred_at: "2026-07-07T00:00:00.000Z", weight: 1 },
-    { name: "Brent crude", type: "concept", occurred_at: null, weight: 2 }
-  ],
-  edges: [
-    { from: "United States", predicate: "reimposed_sanctions_on", to: "Iran", corroboration: 2 },
-    { from: "United States", predicate: "launched_strikes_on", to: "Iran", corroboration: 3 },
-    { from: "Iran", predicate: "struck", to: "Qatari-flagged vessel al-Rakiyat", corroboration: 1, occurred_at: "2026-07-07T00:00:00.000Z" },
-    { from: "Iran", predicate: "threatened_to_close", to: "Strait of Hormuz", corroboration: 2 },
-    { from: "Strait of Hormuz", predicate: "chokepoint_for", to: "Brent crude", corroboration: 1 }
-  ]
-};
-// Semantic sample — a small deterministic 3D cloud (as digim_semantic returns).
-// Three loose clusters so the "proximity = meaning" idea reads immediately.
-const SAMPLE_SEM = (() => {
-  const seeds = [
-    { c: [0.7, 0.5, 0.2], provider: "wikipedia", tag: "Iran–US conflict" },
-    { c: [-0.6, -0.3, 0.5], provider: "hackernews", tag: "oil & energy markets" },
-    { c: [0.1, -0.7, -0.6], provider: "searxng", tag: "regional diplomacy" },
-  ];
-  const points = [];
-  let k = 0;
-  for (const s of seeds) {
-    for (let i = 0; i < 5; i++) {
-      const j = k++;
-      points.push({
-        id: "s" + j,
-        label: s.tag + " · doc " + (i + 1),
-        url: "",                       // sample data — no fake source URLs
-        provider: s.provider,
-        x: s.c[0] + Math.sin(j * 1.7) * 0.18,
-        y: s.c[1] + Math.cos(j * 2.3) * 0.18,
-        z: s.c[2] + Math.sin(j * 0.9) * 0.18,
-      });
-    }
-  }
-  return { view: "semantic", sample: true, dimensions: 1024, point_count: points.length, explained_variance: [0.41, 0.29, 0.17], points };
-})();
+// NO sample/demo data. The viewer shows ONLY real, owner-scoped DIGIM output.
+// If nothing is loaded (or a fetch fails), an explicit message is shown instead
+// of any placeholder graph — so unrelated data can never appear to belong to a
+// research. These start EMPTY.
+const EMPTY = { suggested_view: "network", nodes: [], edges: [] };
+const EMPTY_SEM = { view: "semantic", dimensions: 0, point_count: 0, explained_variance: [], points: [] };
 
 const TYPES = ["person","organization","location","event","technology","concept","other"];
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -298,8 +262,11 @@ function ingest(raw) {
   return { nodes, edges };
 }
 let graphSample = false, semSample = false;
-function refreshSampleBadge(){ const on = view==="semantic" ? semSample : graphSample;
-  const b=document.getElementById("sample-badge"); if(b) b.hidden = !on; }
+function refreshSampleBadge(){ /* sample data removed — nothing to badge */ }
+// Explicit empty/error state — shown INSTEAD of any placeholder graph, so a
+// research with no graph (or a failed/expired fetch) never displays unrelated data.
+function showMsg(text){ const e=document.getElementById("emptymsg"); if(e){ e.textContent=text; e.hidden=false; } }
+function hideMsg(){ const e=document.getElementById("emptymsg"); if(e) e.hidden=true; }
 function setData(raw) {
   G = ingest(raw); selected = null; tlZoom = 1; tlPanX = 0; graphSample = !!(raw && raw.sample); refreshSampleBadge(); renderDetail(); updateStats();
   document.getElementById("s-nodes").textContent = G.nodes.length;
@@ -610,14 +577,29 @@ function apiBase(){
   if(location.protocol.startsWith("http")) return location.origin+"/dina/api/v1";
   return ""; // file:// with no override → fetch will fail; we surface a clear hint
 }
+// DIGIM now requires an authenticated user. This viewer is served same-origin as
+// the console, so it reads the access token the app stored in localStorage and
+// sends it as a Bearer token on every /digim/* call. Without it the API returns
+// 401 and (previously) the viewer fell back to its built-in SAMPLE data.
+function authToken(){ try { return (localStorage.getItem("dina.accessToken")||"").trim(); } catch { return ""; } }
+function apiHeaders(){ const h={"Content-Type":"application/json"}; const t=authToken(); if(t) h["Authorization"]="Bearer "+t; return h; }
+// The research (island) this viewer is scoped to, from ?research=<id>. When set,
+// every graph/semantic/insight call is restricted to THIS research so unrelated
+// researches can never bleed in.
+let RESEARCH_ID = "";
+function scoped(body){ if(RESEARCH_ID){ body.research_id=RESEARCH_ID; body.scope="island"; } return body; }
+function apiError(res){
+  if(res.status===401) return new Error("Your session expired — reload the page to sign in again.");
+  return new Error("API returned HTTP "+res.status);
+}
 async function generateInsight(entity){
   const key=(entity||"").toLowerCase(); if(!key) return;
   insightStore.set(key,{loading:true}); renderDetail();
   try{
     const base=apiBase();
     const res=await fetch(base+"/digim/node-insight",{method:"POST",
-      headers:{"Content-Type":"application/json"}, body:JSON.stringify({entity})});
-    if(!res.ok) throw new Error("API returned HTTP "+res.status);
+      headers:apiHeaders(), body:JSON.stringify(scoped({entity}))});
+    if(!res.ok) throw apiError(res);
     const data=await res.json();
     if(data.status && data.status!=="success") throw new Error(data.message||"insight unavailable");
     insightStore.set(key,{text:String(data.insight||""), sources:Array.isArray(data.sources)?data.sources:[], cached:!!data.cached});
@@ -809,16 +791,18 @@ document.getElementById("modal-x").onclick=()=>modal.close();
 async function fetchAndLoad(kind, q){
   const base=apiBase(); if(!base) throw new Error("Set an API base first (or serve this page from your DINA domain).");
   if(kind==="semantic"){
-    const res=await fetch(base+"/digim/semantic",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filter:q})});
-    if(!res.ok) throw new Error("API returned HTTP "+res.status);
+    const res=await fetch(base+"/digim/semantic",{method:"POST",headers:apiHeaders(),body:JSON.stringify(scoped({filter:q}))});
+    if(!res.ok) throw apiError(res);
     const data=await res.json(); if(!Array.isArray(data.points)) throw new Error(data.message||"no points returned");
     setSemanticData(data); setView("semantic"); buildLegend();
+    if(data.points.length===0) showMsg("No semantic points for this research yet."); else hideMsg();
   } else {
     if(!q) throw new Error("Enter a focus entity/topic for the graph (e.g. Iran).");
-    const res=await fetch(base+"/digim/graph",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:q})});
-    if(!res.ok) throw new Error("API returned HTTP "+res.status);
+    const res=await fetch(base+"/digim/graph",{method:"POST",headers:apiHeaders(),body:JSON.stringify(scoped({query:q}))});
+    if(!res.ok) throw apiError(res);
     const data=await res.json(); if(!Array.isArray(data.nodes)) throw new Error(data.message||"no graph returned");
     setData(data); setView(data.suggested_view==="temporal"?"timeline":"network"); buildLegend();
+    if(data.nodes.length===0) showMsg("No relationships were extracted for this research."); else hideMsg();
   }
 }
 document.getElementById("fetch-btn").onclick=async ()=>{
@@ -831,10 +815,6 @@ document.getElementById("fetch-btn").onclick=async ()=>{
   catch(ex){ err.textContent=String(ex.message||ex); }
   finally{ btn.textContent=label; btn.disabled=false; }
 };
-document.getElementById("json-sample").onclick=()=>{
-  if (view==="semantic") { setSemanticData(SAMPLE_SEM); buildLegend(); }
-  else { setData(SAMPLE); buildLegend(); }
-  modal.close(); };
 // Pull the FIRST balanced {…} or […] out of a paste, so a whole terminal
 // transcript (shell prompt, trailing objects, curl echo) still loads cleanly.
 function extractFirstJson(text){
@@ -871,10 +851,11 @@ document.getElementById("theme-btn").onclick=()=>{ const cur=document.documentEl
 
 function frame(){ tick(); draw(); requestAnimationFrame(frame); }
 new ResizeObserver(resize).observe(cv);
-setData(SAMPLE); setSemanticData(SAMPLE_SEM); buildLegend(); resize(); setView("network"); frame();
+setData(EMPTY); setSemanticData(EMPTY_SEM); buildLegend(); resize(); setView("network"); frame();
+showMsg("No graph loaded.");
 
 // ---- embed / auto-load driven by URL params (the DINA console uses this) ----
-// ?theme=dark|light  ?api=<base>  ?embed=1  ?focus=<entity>  ?view=network|semantic
+// ?theme=dark|light ?api=<base> ?embed=1 ?focus=<entity> ?view=network|semantic ?research=<id>
 (function initFromUrl(){
   try {
     const p = new URLSearchParams(location.search);
@@ -882,14 +863,18 @@ setData(SAMPLE); setSemanticData(SAMPLE_SEM); buildLegend(); resize(); setView("
     if (theme === "dark" || theme === "light") document.documentElement.setAttribute("data-theme", theme);
     const api = p.get("api"); if (api) localStorage.setItem("digim_api_base", api.replace(/\/+$/,""));
     if (p.get("embed") === "1" || p.get("embed") === "true") document.body.classList.add("embed");
+    RESEARCH_ID = (p.get("research") || "").trim(); // island scope for every call
     const focus = (p.get("focus") || "").trim();
     if (focus) {
       const kind = p.get("view") === "semantic" ? "semantic" : "graph";
       const hint = document.getElementById("hint");
+      showMsg("Loading this research’s graph…");
       if (hint) { hint.textContent = "Loading “" + focus + "”…"; hint.style.display = ""; }
       fetchAndLoad(kind, focus)
         .then(() => { if (hint) hint.textContent = "drag to orbit · scroll to zoom · click a node"; })
-        .catch((ex) => { if (hint) hint.textContent = "Could not load “" + focus + "”: " + (ex.message || ex); });
+        .catch((ex) => { showMsg("Could not load this research’s graph — " + (ex.message || ex)); if (hint) hint.textContent = "Could not load “" + focus + "”: " + (ex.message || ex); });
+    } else {
+      showMsg("Open a research and click “Explore graph”, or use “Load data”.");
     }
   } catch { /* non-fatal — the viewer still works manually */ }
 })();
