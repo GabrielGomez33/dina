@@ -1,6 +1,12 @@
 import { useMemo } from 'react';
 import { API_BASE } from '../lib/apiConfig';
 
+// Cache-bust tag for the embedded graph-viewer.html. graph-viewer.html is an
+// un-hashed static file, so a browser can keep serving a stale copy after a
+// deploy. Appending ?v=<tag> makes the iframe request a URL the cache has never
+// seen, forcing a fresh fetch. Bump this whenever graph-viewer.html changes.
+const VIEWER_VERSION = '2026-07-25-noSample';
+
 interface Props {
   /** Focus entity/topic to auto-load (usually the research's top entity or query). */
   focus: string;
@@ -24,6 +30,8 @@ export function ExploreView({ focus, researchId, view = 'network' }: Props) {
     if (focus) params.set('focus', focus);
     // Island scope: restrict the viewer to this research only.
     if (researchId) params.set('research', researchId);
+    // Cache-bust: force the browser past any stale cached graph-viewer.html.
+    params.set('v', VIEWER_VERSION);
     // BASE_URL may be '/dina' or '/dina/'; normalize so we always get
     // /dina/graph-viewer.html (not /dinagraph-viewer.html).
     const base = import.meta.env.BASE_URL.replace(/\/$/, '');
