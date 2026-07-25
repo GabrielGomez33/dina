@@ -79,7 +79,9 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
         )}
       </div>
 
-      {activeTab === 'explore' && canExplore && <ExploreView focus={record.entities[0].text} />}
+      {activeTab === 'explore' && canExplore && (
+        <ExploreView focus={record.entities[0].text} researchId={record.id} />
+      )}
 
       {activeTab === 'briefing' && record.summary && (
         <section className="research-section">
