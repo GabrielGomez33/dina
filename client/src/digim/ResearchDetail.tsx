@@ -20,11 +20,13 @@ function host(u: string): string {
   }
 }
 
-// The detail view for one past research: the briefing, key insights, entities,
-// caveats, and the sources/documents behind it. Purely presentational — the page
-// owns fetching; this renders whatever state it's handed.
+// The detail view for one past research: the briefing + a collapsible Insights
+// panel (key insights, entities, caveats), plus the interactive Explore graph.
+// Purely presentational — the page owns fetching; this renders what it's handed.
 export function ResearchDetail({ record, loading, error, onRetry }: Props) {
   const [tab, setTab] = useState<Tab>('briefing');
+  const [insightsOpen, setInsightsOpen] = useState(true);
+
   if (loading) return <div className="panel muted">Loading research…</div>;
   if (error)
     return (
@@ -43,6 +45,15 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
   // Guard against a stale 'explore' selection when moving to an entity-less
   // research (Explore tab is hidden then, so fall back to the briefing).
   const activeTab: Tab = canExplore ? tab : 'briefing';
+
+  const hasInsights =
+    record.keyInsights.length > 0 || record.entities.length > 0 || record.caveats.length > 0;
+
+  const sources =
+    record.documents && record.documents.length > 0
+      ? record.documents.map((d) => ({ url: d.url, title: d.title || host(d.url), provider: d.provider }))
+      : record.sources.map((u) => ({ url: u, title: host(u), provider: '' }));
+
   return (
     <article className="research">
       <header className="research-head">
@@ -65,8 +76,6 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
         >
           Briefing
         </button>
-        {/* Only offer Explore when this research produced entities — otherwise the
-            graph focus would fall back to unrelated stored data. */}
         {canExplore && (
           <button
             role="tab"
@@ -83,66 +92,96 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
         <ExploreView focus={record.entities[0].text} researchId={record.id} />
       )}
 
-      {activeTab === 'briefing' && record.summary && (
-        <section className="research-section">
-          <h2>Briefing</h2>
-          <p className="research-summary">{record.summary}</p>
-        </section>
-      )}
+      {activeTab === 'briefing' && (
+        <div className={'research-layout' + (insightsOpen && hasInsights ? '' : ' no-rail')}>
+          {/* Main column: the narrative briefing + sources. */}
+          <div className="research-body">
+            {record.summary && (
+              <section className="research-section">
+                <h2>Briefing</h2>
+                <p className="research-summary">{record.summary}</p>
+              </section>
+            )}
 
-      {activeTab === 'briefing' && record.keyInsights.length > 0 && (
-        <section className="research-section">
-          <h2>Key insights</h2>
-          <ul className="bullets">
-            {record.keyInsights.map((k, i) => (
-              <li key={i}>{k}</li>
-            ))}
-          </ul>
-        </section>
-      )}
+            {sources.length > 0 && (
+              <section className="research-section">
+                <h2>Sources</h2>
+                <div className="sources">
+                  {sources.map((s, i) => (
+                    <a key={i} className="source" href={s.url} target="_blank" rel="noopener noreferrer">
+                      <span className="source-title">{s.title}</span>
+                      <span className="source-host">
+                        {host(s.url)}
+                        {s.provider ? ` · ${s.provider}` : ''}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
 
-      {activeTab === 'briefing' && record.entities.length > 0 && (
-        <section className="research-section">
-          <h2>Entities</h2>
-          <div className="chips">
-            {record.entities.map((e, i) => (
-              <span key={i} className={'chip t-' + (e.type || 'other')}>
-                {e.text}
-              </span>
-            ))}
+            {!record.summary && sources.length === 0 && (
+              <p className="muted">No briefing text was generated for this research.</p>
+            )}
           </div>
-        </section>
-      )}
 
-      {activeTab === 'briefing' && record.caveats.length > 0 && (
-        <section className="research-section">
-          <h2>Caveats</h2>
-          <ul className="bullets caveats">
-            {record.caveats.map((c, i) => (
-              <li key={i}>{c}</li>
-            ))}
-          </ul>
-        </section>
-      )}
+          {/* Collapsible Insights rail: key insights, entities, caveats. */}
+          {hasInsights && (
+            <aside className={'insights-rail' + (insightsOpen ? ' open' : ' collapsed')}>
+              <div className="insights-head">
+                <h2>Insights</h2>
+                <button
+                  className="icon-btn"
+                  onClick={() => setInsightsOpen((v) => !v)}
+                  aria-expanded={insightsOpen}
+                  aria-label={insightsOpen ? 'Collapse insights' : 'Expand insights'}
+                  title={insightsOpen ? 'Collapse' : 'Expand'}
+                >
+                  <span aria-hidden>{insightsOpen ? '⟩' : '⟨'}</span>
+                </button>
+              </div>
 
-      {activeTab === 'briefing' && (record.documents?.length || record.sources.length) > 0 && (
-        <section className="research-section">
-          <h2>Sources</h2>
-          <div className="sources">
-            {(record.documents && record.documents.length > 0
-              ? record.documents.map((d) => ({ url: d.url, title: d.title || host(d.url), provider: d.provider }))
-              : record.sources.map((u) => ({ url: u, title: host(u), provider: '' }))
-            ).map((s, i) => (
-              <a key={i} className="source" href={s.url} target="_blank" rel="noopener noreferrer">
-                <span className="source-title">{s.title}</span>
-                <span className="source-host">
-                  {host(s.url)}
-                  {s.provider ? ` · ${s.provider}` : ''}
-                </span>
-              </a>
-            ))}
-          </div>
-        </section>
+              {insightsOpen && (
+                <div className="insights-body">
+                  {record.keyInsights.length > 0 && (
+                    <section className="insight-group">
+                      <h3>Key insights</h3>
+                      <ul className="bullets">
+                        {record.keyInsights.map((k, i) => (
+                          <li key={i}>{k}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+
+                  {record.entities.length > 0 && (
+                    <section className="insight-group">
+                      <h3>Entities</h3>
+                      <div className="chips">
+                        {record.entities.map((e, i) => (
+                          <span key={i} className={'chip t-' + (e.type || 'other')}>
+                            {e.text}
+                          </span>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {record.caveats.length > 0 && (
+                    <section className="insight-group">
+                      <h3>Caveats</h3>
+                      <ul className="bullets caveats">
+                        {record.caveats.map((c, i) => (
+                          <li key={i}>{c}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                </div>
+              )}
+            </aside>
+          )}
+        </div>
       )}
     </article>
   );

@@ -7,8 +7,13 @@
 # Cache rules
 # -----------------------------------------------------------------------------
 <IfModule mod_headers.c>
-  # The SPA shell must not be cached long — new deploys need to reach users.
-  <FilesMatch "^index\.html$">
+  # Un-hashed HTML entry points must not be cached long — new deploys need to
+  # reach users. This covers the SPA shell (index.html) AND the standalone
+  # graph viewer (graph-viewer.html), which the console embeds in an iframe.
+  # Without this the browser heuristically caches graph-viewer.html and keeps
+  # serving a stale copy after a deploy (e.g. an old build that still had demo
+  # data or lacked the auth header), so fixes never reach the page.
+  <FilesMatch "^(index|graph-viewer)\.html$">
     Header set Cache-Control "no-cache, must-revalidate"
   </FilesMatch>
 

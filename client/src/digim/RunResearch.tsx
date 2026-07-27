@@ -8,6 +8,34 @@ interface Props {
 
 type Mode = 'research' | 'investigate';
 
+// Human explanations for every mode/depth choice, surfaced in the UI so the
+// user knows what each option actually does (not just its label).
+const MODE_INFO: Record<Mode, { label: string; blurb: string }> = {
+  research: {
+    label: 'Research',
+    blurb: 'One focused pass — gather the open web on your exact question and synthesize a single grounded briefing. Fast.',
+  },
+  investigate: {
+    label: 'Investigate (multi-facet)',
+    blurb: 'Breaks a broad question into sub-questions, researches each on its own, and fuses them into one comprehensive briefing. Slower, far more thorough.',
+  },
+};
+
+const DEPTH_INFO: Record<IntelligenceLevel, { label: string; blurb: string }> = {
+  surface: {
+    label: 'Surface',
+    blurb: 'A quick scan of a few high-signal sources — best for a fast overview or a well-known topic.',
+  },
+  deep: {
+    label: 'Deep',
+    blurb: 'Wider gathering and closer reading across more sources with stronger corroboration. The dependable default.',
+  },
+  predictive: {
+    label: 'Predictive',
+    blurb: 'Deep gathering plus forward-looking analysis — trends, scenarios, and what may happen next. Slowest.',
+  },
+};
+
 // The "new research" panel. Runs a (long) research or investigate with an
 // abortable request, explicit busy/error/result states, and a Cancel that
 // actually cancels the in-flight call. On success it hands the result up so the
@@ -56,16 +84,13 @@ export function RunResearch({ onComplete }: Props) {
     <div className="run">
       <header className="page-head">
         <h1>New research</h1>
-        <p className="muted">
-          Gather the open web and synthesize a grounded briefing. <strong>Investigate</strong> runs a deeper,
-          multi-facet pass.
-        </p>
+        <p className="muted">Gather the open web and synthesize a grounded briefing.</p>
       </header>
 
       <div className="run-form">
         <textarea
           className="run-query"
-          placeholder="What should DINA research? e.g. the 2026 Iran–USA war: causes, timeline, oil effects"
+          placeholder="What should DINA research? e.g. the correlation between poverty and crime rates over the past decade"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -74,20 +99,30 @@ export function RunResearch({ onComplete }: Props) {
           rows={3}
           disabled={busy}
         />
+
         <div className="run-controls">
           <label className="field">
             <span>Mode</span>
             <select value={mode} onChange={(e) => setMode(e.target.value as Mode)} disabled={busy}>
-              <option value="research">Research</option>
-              <option value="investigate">Investigate (multi-facet)</option>
+              {(Object.keys(MODE_INFO) as Mode[]).map((m) => (
+                <option key={m} value={m}>
+                  {MODE_INFO[m].label}
+                </option>
+              ))}
             </select>
           </label>
           <label className="field">
             <span>Depth</span>
-            <select value={level} onChange={(e) => setLevel(e.target.value as IntelligenceLevel)} disabled={busy}>
-              <option value="surface">Surface</option>
-              <option value="deep">Deep</option>
-              <option value="predictive">Predictive</option>
+            <select
+              value={level}
+              onChange={(e) => setLevel(e.target.value as IntelligenceLevel)}
+              disabled={busy}
+            >
+              {(Object.keys(DEPTH_INFO) as IntelligenceLevel[]).map((l) => (
+                <option key={l} value={l}>
+                  {DEPTH_INFO[l].label}
+                </option>
+              ))}
             </select>
           </label>
           <div className="run-actions">
@@ -102,7 +137,21 @@ export function RunResearch({ onComplete }: Props) {
             )}
           </div>
         </div>
-        <p className="run-hint muted">⌘/Ctrl + Enter to run. Deep passes can take a minute or more.</p>
+
+        {/* Live explanations for the current choices — so every option's purpose
+            is visible, not guessed. */}
+        <div className="run-explain">
+          <div className="explain-item">
+            <span className="explain-key">{MODE_INFO[mode].label}</span>
+            <span className="explain-val">{MODE_INFO[mode].blurb}</span>
+          </div>
+          <div className="explain-item">
+            <span className="explain-key">{DEPTH_INFO[level].label}</span>
+            <span className="explain-val">{DEPTH_INFO[level].blurb}</span>
+          </div>
+        </div>
+
+        <p className="run-hint muted">⌘/Ctrl + Enter to run. Deep and investigate passes can take a minute or more.</p>
       </div>
 
       {busy && (
