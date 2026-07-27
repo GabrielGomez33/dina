@@ -7,6 +7,9 @@
 
 export interface ResearchSummary {
   id: string;
+  /** Investigation root this is a facet of; null for standalone / root rows.
+   *  Used to nest multi-facet 'investigate' sub-researches under one tree. */
+  parentId?: string | null;
   query: string;
   level: string;
   confidence: number;
