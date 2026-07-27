@@ -49,10 +49,20 @@ export function ResearchDetail({ record, loading, error, onRetry }: Props) {
   const hasInsights =
     record.keyInsights.length > 0 || record.entities.length > 0 || record.caveats.length > 0;
 
-  const sources =
+  // Sources can arrive as plain URL strings OR as {url,title,provider} objects
+  // (e.g. an investigation's fused synthesis). Normalize both so we never render
+  // an object as a React child (React error #31).
+  const normalizeSource = (u: unknown): { url: string; title: string; provider: string } => {
+    if (typeof u === 'string') return { url: u, title: host(u), provider: '' };
+    const o = (u || {}) as { url?: string; title?: string; provider?: string };
+    const url = String(o.url || '');
+    return { url, title: String(o.title || host(url)), provider: String(o.provider || '') };
+  };
+  const sources = (
     record.documents && record.documents.length > 0
       ? record.documents.map((d) => ({ url: d.url, title: d.title || host(d.url), provider: d.provider }))
-      : record.sources.map((u) => ({ url: u, title: host(u), provider: '' }));
+      : (record.sources || []).map(normalizeSource)
+  ).filter((s) => s.url);
 
   return (
     <article className="research">
