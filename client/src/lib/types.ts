@@ -54,7 +54,12 @@ export interface GraphNode {
   id: string;
   name: string;
   type: string;
+  /** ISO datetime — only when the date fits the DATETIME window (1000–9999 CE). */
   occurred_at: string | null;
+  /** Signed decimal year the timeline positions by (CE +, BCE/prehistoric −). */
+  occurred_sort?: number | null;
+  /** Human display label for the date ("300,000 years ago", "3200 BCE"). */
+  occurred_label?: string | null;
   weight: number;
 }
 export interface GraphEdge {
@@ -64,6 +69,8 @@ export interface GraphEdge {
   corroboration: number;
   confidence: number | null;
   occurred_at: string | null;
+  occurred_sort?: number | null;
+  occurred_label?: string | null;
   sources: string[];
 }
 export interface GraphResult {

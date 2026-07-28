@@ -5,7 +5,7 @@ import { API_BASE } from '../lib/apiConfig';
 // un-hashed static file, so a browser can keep serving a stale copy after a
 // deploy. Appending ?v=<tag> makes the iframe request a URL the cache has never
 // seen, forcing a fresh fetch. Bump this whenever graph-viewer.html changes.
-const VIEWER_VERSION = '2026-07-25-noSample';
+const VIEWER_VERSION = '2026-07-28-deeptime';
 
 interface Props {
   /** Focus entity/topic to auto-load (usually the research's top entity or query). */
