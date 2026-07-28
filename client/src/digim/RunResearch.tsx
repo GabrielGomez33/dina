@@ -78,7 +78,11 @@ export function RunResearch({ onComplete }: Props) {
   const cancel = () => abortRef.current?.abort();
 
   const answer = result?.answer || result?.summary || '';
-  const sources = Array.isArray(result?.sources) ? (result!.sources as string[]) : [];
+  // Sources may be URL strings or {url,title} objects — normalize to a URL
+  // string so we never render an object as a React child (React error #31).
+  const sources: string[] = (Array.isArray(result?.sources) ? result!.sources : [])
+    .map((u) => (typeof u === 'string' ? u : String((u as { url?: string })?.url || '')))
+    .filter(Boolean);
 
   return (
     <div className="run">

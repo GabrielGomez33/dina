@@ -36,7 +36,9 @@ export interface ResearchRecord extends ResearchSummary {
   entities: Array<{ text: string; type?: string }>;
   topics: Array<{ topic: string; relevance?: number }>;
   caveats: string[];
-  sources: string[];
+  // URL strings, or {url,title,provider} objects (e.g. an investigation's fused
+  // synthesis). The UI normalizes both — never render an item directly.
+  sources: Array<string | { url: string; title?: string; provider?: string }>;
   sourceContentIds: string[];
   documents?: ResearchDocument[];
 }
