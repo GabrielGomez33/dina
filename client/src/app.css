@@ -10,7 +10,11 @@
 }
 
 /* ---- shell: fixed rail + scrolling stage ---- */
-.shell { display: grid; grid-template-columns: 244px 1fr; height: 100%; }
+/* minmax(0, 1fr) — NOT plain 1fr. A `1fr` track is `minmax(auto, 1fr)`, whose
+   auto minimum grows to its widest descendant (the graph iframe/canvas), pushing
+   the column past the viewport and cutting off everything. minmax(0, …) lets the
+   track shrink so the content column is the constraint, not the content. */
+.shell { display: grid; grid-template-columns: 244px minmax(0, 1fr); height: 100%; }
 .rail {
   display: flex; flex-direction: column; gap: 6px;
   background: var(--panel); border-right: 1px solid var(--line); padding: 20px 14px;
@@ -83,7 +87,7 @@
 /* ---- DIGIM page: top bar + collapsible Researches rail + main ---- */
 .digim {
   display: grid;
-  grid-template-columns: 312px 1fr;
+  grid-template-columns: 312px minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas: "topbar topbar" "rail main";
   height: 100%; min-width: 0;
@@ -126,7 +130,7 @@
 
 /* Desktop: collapsing the rail reclaims its space for the main column. */
 @media (min-width: 1024px) {
-  .digim.rail-closed { grid-template-columns: 0 1fr; }
+  .digim.rail-closed { grid-template-columns: 0 minmax(0, 1fr); }
   .digim.rail-closed .history { display: none; }
 }
 .history-search::placeholder { color: var(--ink-faint); }
@@ -267,7 +271,7 @@
    1024 it becomes an off-canvas drawer (see the 1023 block) — so this band rule
    is scoped with a min-width to avoid fighting the drawer's full-width layout. */
 @media (min-width: 1024px) and (max-width: 1080px) {
-  .shell { grid-template-columns: 64px 1fr; }
+  .shell { grid-template-columns: 64px minmax(0, 1fr); }
   .brand { justify-content: center; padding: 6px 0 18px; gap: 0; }
   .brand-name { display: none; }
   .nav-item { justify-content: center; padding: 11px 0; gap: 0; }
@@ -282,7 +286,7 @@
   /* App module rail → off-canvas drawer. Content gets the FULL width (so a
      research/graph is not squeezed); the rail slides in over a scrim only when
      summoned by the ◆ toggle. */
-  .shell { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: minmax(0, 1fr); }
   .rail {
     position: fixed; top: 0; left: 0; bottom: 0; width: min(78vw, 260px); z-index: 70;
     transform: translateX(-100%); transition: transform 200ms ease; box-shadow: var(--shadow-lg);
@@ -304,7 +308,7 @@
   .digim-topbar { padding-left: 58px; }
   .page { padding-left: 60px; }
 
-  .digim { grid-template-columns: 1fr; grid-template-areas: "topbar" "main"; }
+  .digim { grid-template-columns: minmax(0, 1fr); grid-template-areas: "topbar" "main"; }
   .history {
     position: fixed; top: 0; left: 0; bottom: 0; width: min(86vw, 340px); z-index: 60;
     transform: translateX(-100%); transition: transform 200ms ease;
