@@ -223,8 +223,19 @@
 .detail-tab.active { color: var(--ink); border-bottom-color: var(--accent);
   text-shadow: 0 0 16px rgba(var(--accent-rgb), 0.5); }
 .explore { margin-top: 16px; }
-.explore-frame { width: 100%; height: min(72vh, 780px); border: 1px solid var(--line);
-  border-radius: var(--radius-lg); background: var(--panel); box-shadow: var(--shadow); display: block; }
+/* Borderless, transparent, edge-to-edge graph surface — it blends with the page
+   rather than sitting in a card. */
+.explore-frame { width: 100%; height: min(78vh, 820px); border: 0;
+  border-radius: 0; background: transparent; box-shadow: none; display: block; }
+
+/* Widen the graph beyond the content padding on narrow screens: break out to
+   ~94vw, centred on the VIEWPORT (calc keeps it independent of the parent's
+   offset/padding), so the graph gets nearly the full width. Desktop keeps 100%
+   of the main column — a viewport-width breakout there would collide with the
+   rail, so it stays scoped to mobile. */
+@media (max-width: 1023px) {
+  .explore { width: 94vw; margin-left: calc(50% - 47vw); }
+}
 
 /* ---- spinner ---- */
 .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--line); border-top-color: var(--accent);
