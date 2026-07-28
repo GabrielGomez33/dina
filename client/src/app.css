@@ -97,11 +97,15 @@
 /* Slim control bar: rail toggle + active title + quick "New". */
 .digim-topbar {
   grid-area: topbar;
-  display: flex; align-items: center; gap: 12px;
-  padding: 9px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+  /* Controls hang from the bottom border (aligned with the fixed ◆ toggle), so
+     the whole header row shares one baseline. The title stays vertically centred. */
+  display: flex; align-items: flex-end; gap: 12px;
+  /* padding tuned (headless-measured) so ☰ / +New bottoms land on the border
+     baseline together with the fixed ◆ toggle (bottom Y=50, border Y=53). */
+  padding: 16px 16px 2px; border-bottom: 1px solid var(--line); background: var(--panel);
 }
 .digim-topbar-title {
-  flex: 1; min-width: 0; font: 700 13px/1.2 var(--font-ui); color: var(--ink);
+  flex: 1; min-width: 0; align-self: center; font: 700 13px/1.2 var(--font-ui); color: var(--ink);
   letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .topbar-new { flex: none; }
@@ -367,7 +371,7 @@
 /* Very small phones. The rail is an off-canvas drawer here (full-width content),
    so no icon-strip column — just keep the ◆-toggle clearance on the topbar. */
 @media (max-width: 420px) {
-  .digim-topbar { padding: 8px 12px 8px 58px; }
+  .digim-topbar { padding: 16px 12px 2px 58px; } /* keep bottom-border alignment on tiny phones */
 }
 
 /* ============================================================================
@@ -471,8 +475,10 @@
 .rail-actions { display: flex; align-items: center; gap: 8px; }
 .rail-actions .btn.small { margin-left: 0; }
 
-/* Collapsed rail (narrow): hide text, keep avatar + icons centered. */
-@media (max-width: 760px) {
+/* ONLY the 1024–1080px icon-strip rail centers/stacks its footer (no room for
+   text). Below 1024 the rail is a full drawer, so its footer stays LEFT-aligned
+   with the avatar name + a normal theme/sign-out row — matching the nav items. */
+@media (min-width: 1024px) and (max-width: 1080px) {
   .rail-user-meta { display: none; }
   .rail-foot { align-items: center; }
   .rail-actions { flex-direction: column; }
