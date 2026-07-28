@@ -240,7 +240,10 @@ function ingest(raw) {
   const R = 220;
   const nodes = nodesIn.map((n, i) => {
     const node = { name: String(n.name ?? n.id ?? "?"), type: String(n.type ?? "other").toLowerCase(),
-      occurredAt: n.occurred_at ?? n.occurredAt ?? null, weight: Number(n.weight ?? n.mentionCount ?? 1) || 1,
+      occurredAt: n.occurred_at ?? n.occurredAt ?? null,
+      occurredSort: (n.occurred_sort ?? n.occurredSort ?? null),
+      occurredLabel: (n.occurred_label ?? n.occurredLabel ?? null),
+      weight: Number(n.weight ?? n.mentionCount ?? 1) || 1,
       x:(Math.random()-0.5)*R, y:(Math.random()-0.5)*R, z:(Math.random()-0.5)*R, vx:0, vy:0, vz:0, deg:0 };
     byName.set(node.name, node); return node;
   });
@@ -252,7 +255,9 @@ function ingest(raw) {
     edges.push({ s, t, predicate: String(e.predicate ?? "related to"),
       corr: Number(e.corroboration ?? e.corroborationCount ?? 1) || 1,
       confidence: (e.confidence != null ? Number(e.confidence) : null),
-      sources: srcs, occurredAt: e.occurred_at ?? e.occurredAt ?? null });
+      sources: srcs, occurredAt: e.occurred_at ?? e.occurredAt ?? null,
+      occurredSort: (e.occurred_sort ?? e.occurredSort ?? null),
+      occurredLabel: (e.occurred_label ?? e.occurredLabel ?? null) });
     s.deg++; t.deg++;
   }
   // Fan out parallel edges (same unordered pair) so their curves + labels don't stack.
@@ -459,17 +464,35 @@ function mix(hex, fogRGB, t) {
 // Both time-stamped NODES (events) and time-stamped EDGES (dated relationships)
 // are laid out, so a graph whose dates live on the relationships still populates.
 let timelineItems = [];
+// The timeline axis is a SIGNED YEAR (occurred_sort): CE positive, BCE/prehistoric
+// negative — so "300,000 years ago", "3200 BCE", and "1990" all sit on one scale.
+// Back-compat: a row with only a DATETIME occurred_at (pre-backfill) derives its
+// year from that. occurred_label is the authoritative human date string.
+function tlSort(o){
+  if (o.occurredSort != null && isFinite(o.occurredSort)) return Number(o.occurredSort);
+  if (o.occurredAt){ const d=new Date(o.occurredAt); if(!isNaN(+d)) return d.getUTCFullYear()+(d.getUTCMonth())/12; }
+  return null;
+}
+function fmtYear(y){
+  if (y==null || !isFinite(y)) return "";
+  const r=Math.round(y);
+  const withCommas=(n)=>Math.abs(n).toLocaleString("en-US");
+  if (r<0) return `${withCommas(r)} BCE`;
+  if (r<1000) return `${r} CE`;
+  return String(r);
+}
+function tlLabel(o){ return o.occurredLabel || fmtYear(tlSort(o)); }
 function drawTimeline() {
   const inkDim=cssVar("--ink-dim"), ink=cssVar("--ink"), grid=cssVar("--line"), accent=cssVar("--accent");
   const items = [];
-  for (const n of G.nodes) if (n.occurredAt) items.push({ t:+new Date(n.occurredAt), title:n.name, sub:n.type, color:typeColor(n.type), ref:n });
-  for (const e of G.edges) if (e.occurredAt) items.push({ t:+new Date(e.occurredAt), title:pretty(e.predicate), sub:`${e.s.name} → ${e.t.name}`, color:accent, ref:e.s });
+  for (const n of G.nodes){ const t=tlSort(n); if (t!=null) items.push({ t, date:tlLabel(n), title:n.name, sub:n.type, color:typeColor(n.type), ref:n }); }
+  for (const e of G.edges){ const t=tlSort(e); if (t!=null) items.push({ t, date:tlLabel(e), title:pretty(e.predicate), sub:`${e.s.name} → ${e.t.name}`, color:accent, ref:e.s }); }
   items.sort((a,b)=>a.t-b.t);
   ctx.font = "12px " + cssVar("--font-ui");
   if (!items.length) { timelineItems=[]; ctx.fillStyle=inkDim; ctx.textAlign="center";
     ctx.fillText("No time-stamped events or relationships in this graph yet.", W/2, H/2-8);
     ctx.font="11px "+cssVar("--font-mono");
-    ctx.fillText("Nodes or edges carrying occurred_at appear here as a cascade.", W/2, H/2+12); return; }
+    ctx.fillText("Nodes or edges carrying a date appear here as a cascade.", W/2, H/2+12); return; }
   const pad=70, y0=90, laneGap=62, lanes=5;
   const times=items.map(d=>d.t); const min=Math.min(...times),max=Math.max(...times),span=max-min;
   // Normalized position in [0,1], then apply the timeline zoom/pan transform so
@@ -492,12 +515,12 @@ function drawTimeline() {
     roundRect(cx-tw/2,y,tw,h,8); ctx.fill(); ctx.stroke();
     ctx.fillStyle=ink; ctx.textAlign="center"; ctx.textBaseline="top"; ctx.fillText(title,cx,y+6);
     ctx.fillStyle=inkDim; ctx.font="10px "+cssVar("--font-mono"); ctx.fillText(clip(it.sub,30),cx,y+21);
-    ctx.fillText(new Date(it.t).toISOString().slice(0,10),cx,y+32);
+    ctx.fillText(clip(it.date||fmtYear(it.t),22),cx,y+32);
     return {...it, box:{x:cx-tw/2,y,w:tw,h}, dot:{x,y:y0}}; });
   ctx.fillStyle=inkDim; ctx.font="10px "+cssVar("--font-mono");
   const xMin=xOf(min,0), xMax=xOf(max,items.length-1);
-  if (xMin>pad-40 && xMin<W){ ctx.textAlign="center"; ctx.fillText(new Date(min).toISOString().slice(0,10), Math.max(pad,xMin), y0-14); }
-  if (xMax>0 && xMax<W-pad+40){ ctx.textAlign="center"; ctx.fillText(new Date(max).toISOString().slice(0,10), Math.min(W-pad,xMax), y0-14); }
+  if (xMin>pad-40 && xMin<W){ ctx.textAlign="center"; ctx.fillText(fmtYear(min), Math.max(pad,xMin), y0-14); }
+  if (xMax>0 && xMax<W-pad+40){ ctx.textAlign="center"; ctx.fillText(fmtYear(max), Math.min(W-pad,xMax), y0-14); }
   if (span===0){ ctx.textAlign="center"; ctx.fillText("all items share one date — spaced evenly", W/2, y0-14); }
   if (tlZoom>1.01){ ctx.textAlign="right"; ctx.fillText(`${tlZoom.toFixed(1)}×`, W-pad, H-14); }
 }
@@ -588,6 +611,14 @@ function apiHeaders(){ const h={"Content-Type":"application/json"}; const t=auth
 // researches can never bleed in.
 let RESEARCH_ID = "";
 function scoped(body){ if(RESEARCH_ID){ body.research_id=RESEARCH_ID; body.scope="island"; } return body; }
+// Lazy-load state. The embedded viewer auto-loads ONE dataset on init (from
+// ?view=). The graph feeds BOTH the Network and Timeline tabs; the semantic cloud
+// is a SEPARATE fetch (/digim/semantic). Without lazy-loading, whichever tab you
+// didn't start on stays empty — the Semantic tab in particular never fetched, so
+// it was always blank even when the research had embeddings. AUTO_FOCUS is the
+// focus term captured at init so a tab switch can fetch its data on first open.
+let AUTO_FOCUS = "";
+let graphLoaded = false, semLoaded = false, graphLoading = false, semLoading = false;
 function apiError(res){
   if(res.status===401) return new Error("Your session expired — reload the page to sign in again.");
   return new Error("API returned HTTP "+res.status);
@@ -631,8 +662,9 @@ function relRow(e, dir){
   const head = dir==="out"
     ? `<span class="pred">${esc(pretty(e.predicate))}</span> → <span class="other">${esc(clip(other,24))}</span>`
     : `<span class="other">${esc(clip(other,24))}</span> <span class="pred">${esc(pretty(e.predicate))}</span> →`;
+  const when = e.occurredLabel || (e.occurredSort!=null?fmtYear(e.occurredSort):(e.occurredAt?new Date(e.occurredAt).toISOString().slice(0,10):""));
   const meta = [ e.corr>1?`×${e.corr} corrob.`:"", e.confidence!=null?`${conf(e.confidence)} conf`:"",
-    e.occurredAt?new Date(e.occurredAt).toISOString().slice(0,10):"" ].filter(Boolean).join(" · ");
+    when ].filter(Boolean).join(" · ");
   const srcs = (e.sources||[]).slice(0,4).map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener" class="src">${esc(host(u))}</a>`).join("");
   return `<div class="rel">${head}${meta?`<div class="rel-meta">${esc(meta)}</div>`:""}${srcs?`<div class="rel-src">${srcs}</div>`:""}</div>`;
 }
@@ -770,7 +802,8 @@ function setView(v){ const prev=view; view=v;
   // when crossing that boundary so a stale key can't mis-highlight.
   if ((prev==="semantic") !== (v==="semantic")) { selected=null; }
   buildLegend(); updateStats(); refreshSampleBadge(); renderDetail();
-  if (v==="network") alpha=Math.max(alpha,0.5); }
+  if (v==="network") alpha=Math.max(alpha,0.5);
+  maybeAutoLoad(v); }
 document.getElementById("tab-network").onclick=()=>setView("network");
 document.getElementById("tab-timeline").onclick=()=>setView("timeline");
 document.getElementById("tab-semantic").onclick=()=>setView("semantic");
@@ -788,21 +821,51 @@ document.getElementById("modal-x").onclick=()=>modal.close();
 // the DINA domain or an API base is set; the hosted preview blocks this by CSP.
 // Shared fetch→load used by the Fetch button AND by URL-driven auto-load (when
 // the console embeds this viewer for a specific research focus).
-async function fetchAndLoad(kind, q){
+// Fetch + populate one dataset. `changeView` switches the active tab to the
+// loaded data (init + the Fetch button want this); a lazy tab-triggered load
+// passes false so it fills the tab the user just opened WITHOUT yanking the view.
+async function loadData(kind, q, changeView){
   const base=apiBase(); if(!base) throw new Error("Set an API base first (or serve this page from your DINA domain).");
   if(kind==="semantic"){
     const res=await fetch(base+"/digim/semantic",{method:"POST",headers:apiHeaders(),body:JSON.stringify(scoped({filter:q}))});
     if(!res.ok) throw apiError(res);
     const data=await res.json(); if(!Array.isArray(data.points)) throw new Error(data.message||"no points returned");
-    setSemanticData(data); setView("semantic"); buildLegend();
-    if(data.points.length===0) showMsg("No semantic points for this research yet."); else hideMsg();
+    setSemanticData(data); semLoaded=true; buildLegend();
+    if(changeView) setView("semantic");
+    if(view==="semantic"){ if(data.points.length===0) showMsg("No semantic points for this research yet."); else hideMsg(); }
   } else {
     if(!q) throw new Error("Enter a focus entity/topic for the graph (e.g. Iran).");
     const res=await fetch(base+"/digim/graph",{method:"POST",headers:apiHeaders(),body:JSON.stringify(scoped({query:q}))});
     if(!res.ok) throw apiError(res);
     const data=await res.json(); if(!Array.isArray(data.nodes)) throw new Error(data.message||"no graph returned");
-    setData(data); setView(data.suggested_view==="temporal"?"timeline":"network"); buildLegend();
-    if(data.nodes.length===0) showMsg("No relationships were extracted for this research."); else hideMsg();
+    setData(data); graphLoaded=true; buildLegend();
+    if(changeView) setView(data.suggested_view==="temporal"?"timeline":"network");
+    if(view!=="semantic"){ if(data.nodes.length===0) showMsg("No relationships were extracted for this research."); else hideMsg(); }
+  }
+}
+// Back-compat: init + the Fetch button load a dataset AND switch to its view.
+async function fetchAndLoad(kind, q){ return loadData(kind, q, true); }
+// First time a tab is opened, fetch its data if the embed hasn't loaded it yet.
+// Network + Timeline share the graph; Semantic has its own cloud. Idempotent and
+// re-entrancy-guarded so a rapid tab toggle can't fire duplicate requests.
+function maybeAutoLoad(v){
+  if(!apiBase()) return;
+  if(v==="semantic"){
+    if(semLoaded || semLoading) return;
+    if(!RESEARCH_ID && !AUTO_FOCUS) return; // nothing to scope a cloud to
+    semLoading=true;
+    showMsg("Loading this research’s semantic map…");
+    // EMPTY filter → the FULL island cloud (the whole research's embeddings).
+    // Passing the focus term here would filter the points down to a near-empty set.
+    loadData("semantic", "", false)
+      .catch((ex)=>{ if(view==="semantic") showMsg("Could not load semantic map — "+(ex.message||ex)); })
+      .finally(()=>{ semLoading=false; });
+  } else { // network or timeline → needs the graph
+    if(!AUTO_FOCUS) return;
+    if(graphLoaded || graphLoading) return; graphLoading=true;
+    loadData("graph", AUTO_FOCUS, false)
+      .catch((ex)=>{ if(view!=="semantic") showMsg("Could not load graph — "+(ex.message||ex)); })
+      .finally(()=>{ graphLoading=false; });
   }
 }
 document.getElementById("fetch-btn").onclick=async ()=>{
@@ -865,12 +928,14 @@ showMsg("No graph loaded.");
     if (p.get("embed") === "1" || p.get("embed") === "true") document.body.classList.add("embed");
     RESEARCH_ID = (p.get("research") || "").trim(); // island scope for every call
     const focus = (p.get("focus") || "").trim();
+    AUTO_FOCUS = focus; // captured so a tab switch can lazy-load its dataset
     if (focus) {
       const kind = p.get("view") === "semantic" ? "semantic" : "graph";
       const hint = document.getElementById("hint");
-      showMsg("Loading this research’s graph…");
+      showMsg(kind === "semantic" ? "Loading this research’s semantic map…" : "Loading this research’s graph…");
       if (hint) { hint.textContent = "Loading “" + focus + "”…"; hint.style.display = ""; }
-      fetchAndLoad(kind, focus)
+      // Semantic loads the FULL island cloud (empty filter); graph needs the focus.
+      fetchAndLoad(kind, kind === "semantic" ? "" : focus)
         .then(() => { if (hint) hint.textContent = "drag to orbit · scroll to zoom · click a node"; })
         .catch((ex) => { showMsg("Could not load this research’s graph — " + (ex.message || ex)); if (hint) hint.textContent = "Could not load “" + focus + "”: " + (ex.message || ex); });
     } else {
