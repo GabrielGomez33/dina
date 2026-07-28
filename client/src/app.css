@@ -272,7 +272,13 @@
   }
   .digim.rail-open .history { transform: none; }
   .history-close { display: grid; }
-  .digim-scrim { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, 0.5); }
+  /* Scrim appears ONLY while the drawer is open. It must stay display:none when
+     closed — otherwise this fixed, inset:0 overlay darkens the whole page and
+     eats every click at narrow widths. Gated on .rail-open (matches the drawer)
+     AND the component's hidden attr, so a stale state can't leave it covering. */
+  .digim.rail-open .digim-scrim:not([hidden]) {
+    display: block; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, 0.5);
+  }
 
   .research-layout { flex-direction: column; gap: 20px; }
   .insights-rail, .insights-rail.collapsed { width: 100%; position: static; }

@@ -64,6 +64,25 @@ export function DigimPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [railOpen]);
 
+  // Keep the rail state consistent with the breakpoint. `railOpen` means two
+  // different things per mode — an inline expanded rail on desktop vs an open
+  // OVERLAY drawer (with a page-darkening scrim) on mobile. Without this, resizing
+  // from desktop (railOpen=true) down to mobile left the drawer "open", so the
+  // scrim covered and froze the whole page. On crossing the breakpoint, reset to
+  // each mode's natural default (open on desktop, closed on mobile) — same rule as
+  // initialRailOpen(), just applied on the transition.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const sync = (e: MediaQueryList | MediaQueryListEvent) => setRailOpen(e.matches);
+    if (mq.addEventListener) mq.addEventListener('change', sync);
+    else mq.addListener(sync); // Safari < 14 fallback
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', sync);
+      else mq.removeListener(sync);
+    };
+  }, []);
+
   const mode = researchId ? 'detail' : 'new';
   const activeTitle = mode === 'detail' ? detail.data?.query || 'Research' : 'New research';
 
