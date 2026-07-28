@@ -10,7 +10,11 @@
 }
 
 /* ---- shell: fixed rail + scrolling stage ---- */
-.shell { display: grid; grid-template-columns: 244px 1fr; height: 100%; }
+/* minmax(0, 1fr) — NOT plain 1fr. A `1fr` track is `minmax(auto, 1fr)`, whose
+   auto minimum grows to its widest descendant (the graph iframe/canvas), pushing
+   the column past the viewport and cutting off everything. minmax(0, …) lets the
+   track shrink so the content column is the constraint, not the content. */
+.shell { display: grid; grid-template-columns: 244px minmax(0, 1fr); height: 100%; }
 .rail {
   display: flex; flex-direction: column; gap: 6px;
   background: var(--panel); border-right: 1px solid var(--line); padding: 20px 14px;
@@ -38,7 +42,14 @@
 .theme-toggle { align-self: flex-start; background: transparent; border: 1px solid var(--line); color: var(--ink-dim);
   border-radius: 50%; width: 38px; height: 38px; cursor: pointer; font-size: 15px; }
 .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
-.stage { overflow: auto; height: 100%; }
+/* min-width:0 is ESSENTIAL: as a grid item, .stage defaults to min-width:auto,
+   so a wide descendant (the graph iframe/canvas) would force this column past the
+   viewport — cutting off the header and pushing the canvas off-centre. Pinning it
+   to 0 lets the column stay exactly its track width; wide content scrolls INSIDE
+   .stage instead of blowing out the page. */
+.stage { overflow: auto; height: 100%; min-width: 0; }
+/* No page-level horizontal scroll — the shell owns its width. */
+.shell { overflow-x: hidden; }
 
 /* ---- generic page + panels ---- */
 .page { padding: 40px 44px; max-width: 1140px; }
@@ -76,10 +87,10 @@
 /* ---- DIGIM page: top bar + collapsible Researches rail + main ---- */
 .digim {
   display: grid;
-  grid-template-columns: 312px 1fr;
+  grid-template-columns: 312px minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas: "topbar topbar" "rail main";
-  height: 100%;
+  height: 100%; min-width: 0;
   min-height: 0;
 }
 
@@ -119,7 +130,7 @@
 
 /* Desktop: collapsing the rail reclaims its space for the main column. */
 @media (min-width: 1024px) {
-  .digim.rail-closed { grid-template-columns: 0 1fr; }
+  .digim.rail-closed { grid-template-columns: 0 minmax(0, 1fr); }
   .digim.rail-closed .history { display: none; }
 }
 .history-search::placeholder { color: var(--ink-faint); }
@@ -172,7 +183,8 @@
 .research-meta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font: 500 11px/1 var(--font-mono); color: var(--ink-dim); }
 .research-section { margin-top: 28px; }
 .research-section h2 { font: 700 11px/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-faint); margin: 0 0 12px; }
-.research-summary { font: 400 14.5px/1.7 var(--font-ui); white-space: pre-wrap; color: var(--ink); }
+.research-summary { font: 400 14.5px/1.7 var(--font-ui); white-space: pre-wrap; color: var(--ink);
+  overflow-wrap: anywhere; word-break: break-word; }
 .bullets { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; font-size: 13.5px; line-height: 1.6; }
 .caveats { color: var(--warn); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -183,10 +195,12 @@
 .chip:hover { color: var(--ink); border-color: var(--accent-line); }
 .sources { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 .sources.compact { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); margin-top: 12px; }
-.source { display: flex; flex-direction: column; gap: 4px; padding: 11px 13px; background: var(--panel-2); border: 1px solid var(--line);
+.source { min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 11px 13px; background: var(--panel-2); border: 1px solid var(--line);
   border-radius: var(--radius); text-decoration: none; color: var(--ink); }
 .source:hover { border-color: var(--accent-line); box-shadow: var(--glow); }
-.source-title { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* min-width:0 lets the nowrap title ellipsize inside its flex-column card instead
+   of forcing the card (and the sources grid track) to the full title width. */
+.source-title { min-width: 0; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-host { font: 500 10px/1 var(--font-mono); color: var(--ink-faint); }
 
 /* ---- run research form ---- */
@@ -212,8 +226,19 @@
 .detail-tab.active { color: var(--ink); border-bottom-color: var(--accent);
   text-shadow: 0 0 16px rgba(var(--accent-rgb), 0.5); }
 .explore { margin-top: 16px; }
-.explore-frame { width: 100%; height: min(72vh, 780px); border: 1px solid var(--line);
-  border-radius: var(--radius-lg); background: var(--panel); box-shadow: var(--shadow); display: block; }
+/* Borderless, transparent, edge-to-edge graph surface — it blends with the page
+   rather than sitting in a card. */
+.explore-frame { width: 100%; height: min(78vh, 820px); border: 0;
+  border-radius: 0; background: transparent; box-shadow: none; display: block; }
+
+/* Widen the graph beyond the content padding on narrow screens: break out to
+   ~94vw, centred on the VIEWPORT (calc keeps it independent of the parent's
+   offset/padding), so the graph gets nearly the full width. Desktop keeps 100%
+   of the main column — a viewport-width breakout there would collide with the
+   rail, so it stays scoped to mobile. */
+@media (max-width: 1023px) {
+  .explore { width: 94vw; margin-left: calc(50% - 47vw); }
+}
 
 /* ---- spinner ---- */
 .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--line); border-top-color: var(--accent);
@@ -260,7 +285,7 @@
    1024 it becomes an off-canvas drawer (see the 1023 block) — so this band rule
    is scoped with a min-width to avoid fighting the drawer's full-width layout. */
 @media (min-width: 1024px) and (max-width: 1080px) {
-  .shell { grid-template-columns: 64px 1fr; }
+  .shell { grid-template-columns: 64px minmax(0, 1fr); }
   .brand { justify-content: center; padding: 6px 0 18px; gap: 0; }
   .brand-name { display: none; }
   .nav-item { justify-content: center; padding: 11px 0; gap: 0; }
@@ -275,7 +300,7 @@
   /* App module rail → off-canvas drawer. Content gets the FULL width (so a
      research/graph is not squeezed); the rail slides in over a scrim only when
      summoned by the ◆ toggle. */
-  .shell { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: minmax(0, 1fr); }
   .rail {
     position: fixed; top: 0; left: 0; bottom: 0; width: min(78vw, 260px); z-index: 70;
     transform: translateX(-100%); transition: transform 200ms ease; box-shadow: var(--shadow-lg);
@@ -297,7 +322,7 @@
   .digim-topbar { padding-left: 58px; }
   .page { padding-left: 60px; }
 
-  .digim { grid-template-columns: 1fr; grid-template-areas: "topbar" "main"; }
+  .digim { grid-template-columns: minmax(0, 1fr); grid-template-areas: "topbar" "main"; }
   .history {
     position: fixed; top: 0; left: 0; bottom: 0; width: min(86vw, 340px); z-index: 60;
     transform: translateX(-100%); transition: transform 200ms ease;
@@ -313,7 +338,13 @@
     display: block; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, 0.5);
   }
 
-  .research-layout { flex-direction: column; gap: 20px; }
+  /* align-items:stretch is CRITICAL here. The base .research-layout uses
+     align-items:flex-start; once this becomes a column, flex-start makes each
+     child shrink-to-fit its CONTENT width (a paragraph's max-content ≈ 700px),
+     overflowing the viewport and cutting off the briefing + sources. Stretch pins
+     them to the container (viewport) width so text wraps correctly. */
+  .research-layout { flex-direction: column; align-items: stretch; gap: 20px; }
+  .research-body { width: 100%; }
   .insights-rail, .insights-rail.collapsed { width: 100%; position: static; }
   .insights-rail.collapsed .insights-head { flex-direction: row; border-bottom: 0; padding: 12px 14px; }
   .insights-rail.collapsed .insights-head h2 { display: block; }
@@ -325,7 +356,7 @@
   .page { padding: 24px 18px 24px 60px; } /* keep left clearance for the ◆ toggle */
   .page-head h1 { font-size: 24px; }
   .research-head h1 { font-size: 22px; }
-  .sources, .sources.compact { grid-template-columns: 1fr; }
+  .sources, .sources.compact { grid-template-columns: minmax(0, 1fr); }
   .run-explain { grid-template-columns: 1fr; }
   .run-controls { gap: 12px; }
   .field { flex: 1 1 140px; }

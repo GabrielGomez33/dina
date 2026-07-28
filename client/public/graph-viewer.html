@@ -160,6 +160,14 @@
   @media (max-width: 820px) {
     #details-btn { display: inline-flex; }
     .focuswrap input { width: 150px; }
+    /* Compact the header so its controls never overflow the narrow iframe (the
+       theme ◑ was getting clipped). Drop the stat LABELS (keep the numbers), hide
+       the paste-Load button in embed (the console drives loading), tighten gaps. */
+    header { padding: 8px 10px; gap: 8px 10px; }
+    .brand { display: none; }
+    .stats { gap: 12px; }
+    .stat span { display: none; }
+    body.embed #load-btn { display: none; }
     aside {
       position: fixed; left: 0; right: 0; bottom: 0; width: auto; flex: none; height: auto;
       max-height: min(72vh, 460px); border-left: 0; border-top: 1px solid var(--line);
