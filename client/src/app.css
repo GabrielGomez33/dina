@@ -251,7 +251,15 @@
 .nav-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Medium: collapse the app rail to icons only. */
-@media (max-width: 1080px) {
+/* The module-rail drawer toggle + backdrop are desktop-inert; the ≤1023 query
+   below reveals them. */
+.rail-toggle { display: none; }
+.rail-scrim { display: none; }
+
+/* Narrow desktop band (1024–1080): the rail is a compact icon-only strip. Below
+   1024 it becomes an off-canvas drawer (see the 1023 block) — so this band rule
+   is scoped with a min-width to avoid fighting the drawer's full-width layout. */
+@media (min-width: 1024px) and (max-width: 1080px) {
   .shell { grid-template-columns: 64px 1fr; }
   .brand { justify-content: center; padding: 6px 0 18px; gap: 0; }
   .brand-name { display: none; }
@@ -264,6 +272,31 @@
    the top-bar toggle; the main column is always full width. The Insights rail
    drops below the briefing and spans full width. */
 @media (max-width: 1023px) {
+  /* App module rail → off-canvas drawer. Content gets the FULL width (so a
+     research/graph is not squeezed); the rail slides in over a scrim only when
+     summoned by the ◆ toggle. */
+  .shell { grid-template-columns: 1fr; }
+  .rail {
+    position: fixed; top: 0; left: 0; bottom: 0; width: min(78vw, 260px); z-index: 70;
+    transform: translateX(-100%); transition: transform 200ms ease; box-shadow: var(--shadow-lg);
+  }
+  .shell.rail-open .rail { transform: none; }
+  /* Full labels inside the drawer (undo any icon-only compaction). */
+  .brand-name, .nav-label, .soon { display: inline; }
+  .nav-item { justify-content: flex-start; gap: 11px; padding: 10px 12px; }
+  .rail-toggle {
+    display: inline-flex; align-items: center; justify-content: center; position: fixed;
+    top: 10px; left: 10px; z-index: 72; width: 40px; height: 40px; border-radius: 10px;
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+    box-shadow: var(--shadow); font-size: 15px; cursor: pointer;
+  }
+  .shell.rail-open .rail-toggle { left: calc(min(78vw, 260px) + 10px); background: var(--panel-2); }
+  .rail-scrim:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 65; background: rgba(0, 0, 0, 0.5); }
+  /* Clear the fixed ◆ toggle: shift page/topbar content right so nothing hides
+     behind it. The DIGIM topbar's own ☰ then sits just right of the app toggle. */
+  .digim-topbar { padding-left: 58px; }
+  .page { padding-left: 60px; }
+
   .digim { grid-template-columns: 1fr; grid-template-areas: "topbar" "main"; }
   .history {
     position: fixed; top: 0; left: 0; bottom: 0; width: min(86vw, 340px); z-index: 60;
@@ -289,7 +322,7 @@
 /* Phone: tighten spacing, stack the run controls and option explanations. */
 @media (max-width: 640px) {
   .digim-main { padding: 20px 16px; }
-  .page { padding: 24px 18px; }
+  .page { padding: 24px 18px 24px 60px; } /* keep left clearance for the ◆ toggle */
   .page-head h1 { font-size: 24px; }
   .research-head h1 { font-size: 22px; }
   .sources, .sources.compact { grid-template-columns: 1fr; }
@@ -300,11 +333,10 @@
   .run-actions .btn { width: 100%; }
 }
 
-/* Very small: shrink the app icon rail a touch more. */
+/* Very small phones. The rail is an off-canvas drawer here (full-width content),
+   so no icon-strip column — just keep the ◆-toggle clearance on the topbar. */
 @media (max-width: 420px) {
-  .shell { grid-template-columns: 52px 1fr; }
-  .rail { padding: 14px 6px; }
-  .digim-topbar { padding: 8px 12px; }
+  .digim-topbar { padding: 8px 12px 8px 58px; }
 }
 
 /* ============================================================================

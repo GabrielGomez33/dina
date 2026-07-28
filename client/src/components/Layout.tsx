@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from './ErrorBoundary';
 import { MODULES } from '../lib/modules';
 import { APP_NAME } from '../lib/apiConfig';
@@ -8,11 +8,26 @@ import { useAuth } from '../auth/AuthContext';
 
 // The shared console shell: a persistent left rail of DINA modules + a theme
 // toggle, with the active page rendered in the main area inside an error
-// boundary so a page crash can't blank the whole app.
+// boundary so a page crash can't blank the whole app. On phones the rail is an
+// off-canvas drawer (collapsed by default so a research/graph gets the full
+// width), summoned by the ◆ toggle and dismissed by tap-away, Escape, or nav.
 export function Layout() {
   const [theme, setTheme] = useState<Theme>(() => initTheme());
+  const [railOpen, setRailOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Collapse the drawer whenever the route changes (you navigated somewhere).
+  useEffect(() => { setRailOpen(false); }, [location.pathname]);
+
+  // Escape closes the drawer (mobile affordance).
+  useEffect(() => {
+    if (!railOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setRailOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [railOpen]);
 
   const toggleTheme = () => {
     const next: Theme = theme === 'dark' ? 'light' : 'dark';
@@ -28,7 +43,18 @@ export function Layout() {
   const initial = (user?.username || user?.email || '?').charAt(0).toUpperCase();
 
   return (
-    <div className="shell">
+    <div className={'shell' + (railOpen ? ' rail-open' : '')}>
+      {/* Mobile-only: opens the module rail. Hidden on desktop via CSS. */}
+      <button
+        className="rail-toggle"
+        aria-label={railOpen ? 'Close menu' : 'Open menu'}
+        aria-expanded={railOpen}
+        onClick={() => setRailOpen((v) => !v)}
+      >
+        <span aria-hidden>{railOpen ? '✕' : '◆'}</span>
+      </button>
+      {/* Backdrop for the mobile rail drawer; inert on desktop (CSS display:none). */}
+      <div className="rail-scrim" role="presentation" onClick={() => setRailOpen(false)} hidden={!railOpen} />
       <nav className="rail" aria-label="DINA modules">
         <div className="brand">
           <span className="brand-mark">◆</span>

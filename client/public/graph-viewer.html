@@ -148,7 +148,35 @@
   .modal-f { display: flex; gap: 10px; justify-content: flex-end; }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #06232a; }
   .err { color: #d9534f; font: 500 11.5px/1.4 var(--font-mono); min-height: 14px; }
-  @media (max-width: 720px) { aside { display: none; } .stats .stat:nth-child(3) { display: none; } }
+  /* The Details toggle + sheet grab-handle are desktop-hidden; the mobile media
+     query below reveals them. */
+  #details-btn { display: none; }
+  .sheet-handle { display: none; }
+  /* NARROW SCREENS: the node-detail / insight rail must stay reachable (it was
+     display:none before — you could never inspect a node or Generate insight on a
+     phone). It becomes a slide-up BOTTOM SHEET: the canvas keeps the full width
+     (aside is position:fixed, out of flow), and the sheet is opened by the Details
+     button or automatically when you pick a node, and dismissed by its handle. */
+  @media (max-width: 820px) {
+    #details-btn { display: inline-flex; }
+    .focuswrap input { width: 150px; }
+    aside {
+      position: fixed; left: 0; right: 0; bottom: 0; width: auto; flex: none; height: auto;
+      max-height: min(72vh, 460px); border-left: 0; border-top: 1px solid var(--line);
+      border-radius: 16px 16px 0 0; box-shadow: 0 -10px 34px rgba(0,0,0,.30);
+      transform: translateY(calc(100% + 6px)); transition: transform .22s ease; z-index: 45;
+      padding-top: 8px;
+    }
+    body.sheet-open aside { transform: none; }
+    .sheet-handle {
+      display: block; width: 100%; background: transparent; border: 0; cursor: pointer;
+      padding: 6px 0 10px; margin: 0 0 4px;
+    }
+    .sheet-handle::before {
+      content: ""; display: block; width: 40px; height: 4px; border-radius: 3px;
+      background: var(--line); margin: 0 auto;
+    }
+  }
 </style>
 </head>
 <body>
@@ -165,6 +193,7 @@
     <div class="stat"><b id="s-nodes">0</b><span id="s-nodes-lbl">Entities</span></div>
     <div class="stat"><b id="s-edges">0</b><span id="s-edges-lbl">Relations</span></div>
     <button class="iconbtn" id="spin-btn" aria-pressed="true" title="Toggle auto-rotate">⟳</button>
+    <button class="iconbtn" id="details-btn" title="Details" aria-label="Show details panel">ⓘ</button>
     <button class="btn" id="load-btn">Load data</button>
     <button class="iconbtn" id="theme-btn" title="Toggle theme" aria-label="Toggle theme">◑</button>
   </div>
@@ -178,6 +207,7 @@
     <div class="hint" id="hint">drag to orbit · scroll to zoom · click a node</div>
   </div>
   <aside>
+    <button class="sheet-handle" id="sheet-close" aria-label="Close details panel"></button>
     <div><p class="rail-h" id="legend-h">Node type</p><div class="legend" id="legend"></div>
       <p class="legend-note" id="legend-note">size = mentions · edge width = corroboration · depth = 3D</p></div>
     <div class="detail empty" id="detail"><p class="rail-h">Selected</p>
@@ -774,7 +804,7 @@ cv.addEventListener("pointermove",(e)=>{
 });
 function clampTlPan(){ const span=(W-140)*(tlZoom-1); tlPanX=Math.max(-span-40, Math.min(40, tlPanX)); }
 function endDrag(e){ if (dragging && !moved){ const r=cv.getBoundingClientRect(); const nd=nodeAt(e.clientX-r.left,e.clientY-r.top);
-    selected = nd ? (selKey(nd)===selected?null:selKey(nd)) : null; renderDetail(); }
+    selected = nd ? (selKey(nd)===selected?null:selKey(nd)) : null; renderDetail(); revealDetailForSelection(); }
   dragging=false; dragNode=null; cv.classList.remove("dragging"); }
 cv.addEventListener("pointerup",endDrag); cv.addEventListener("pointercancel",endDrag);
 cv.addEventListener("wheel",(e)=>{ e.preventDefault();
@@ -815,6 +845,20 @@ document.getElementById("tab-semantic").onclick=()=>setView("semantic");
 const spinBtn=document.getElementById("spin-btn");
 spinBtn.setAttribute("aria-pressed", String(spin));
 spinBtn.onclick=()=>{ spin=!spin; spinBtn.setAttribute("aria-pressed",String(spin)); };
+
+// ---- mobile detail SHEET (aside becomes a slide-up panel on narrow screens) ----
+const isSheet=()=> window.matchMedia && window.matchMedia("(max-width: 820px)").matches;
+function openSheet(){ document.body.classList.add("sheet-open"); }
+function closeSheet(){ document.body.classList.remove("sheet-open"); }
+// Auto-reveal the sheet when a node is picked (so its detail + Generate insight
+// are seen immediately); auto-hide when the pick is cleared. Desktop: no-op.
+function revealDetailForSelection(){ if(!isSheet()) return; if(selected) openSheet(); else closeSheet(); }
+document.getElementById("details-btn").onclick=()=> document.body.classList.toggle("sheet-open");
+document.getElementById("sheet-close").onclick=closeSheet;
+// Leaving mobile width must not leave the body stuck in sheet-open state.
+if (window.matchMedia){ const mqSheet=window.matchMedia("(max-width: 820px)");
+  const onSheetMq=(e)=>{ if(!e.matches) closeSheet(); };
+  if (mqSheet.addEventListener) mqSheet.addEventListener("change",onSheetMq); else mqSheet.addListener(onSheetMq); }
 
 const modal=document.getElementById("modal");
 const apiInput=document.getElementById("api-base");
