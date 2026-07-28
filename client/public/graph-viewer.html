@@ -518,10 +518,15 @@ function drawTimeline() {
     ctx.fillText(clip(it.date||fmtYear(it.t),22),cx,y+32);
     return {...it, box:{x:cx-tw/2,y,w:tw,h}, dot:{x,y:y0}}; });
   ctx.fillStyle=inkDim; ctx.font="10px "+cssVar("--font-mono");
-  const xMin=xOf(min,0), xMax=xOf(max,items.length-1);
-  if (xMin>pad-40 && xMin<W){ ctx.textAlign="center"; ctx.fillText(fmtYear(min), Math.max(pad,xMin), y0-14); }
-  if (xMax>0 && xMax<W-pad+40){ ctx.textAlign="center"; ctx.fillText(fmtYear(max), Math.min(W-pad,xMax), y0-14); }
-  if (span===0){ ctx.textAlign="center"; ctx.fillText("all items share one date — spaced evenly", W/2, y0-14); }
+  if (span===0){
+    // One date (or all identical): a single centered caption WITH the date — the
+    // min/max endpoint labels would draw on top of each other and this line.
+    ctx.textAlign="center"; ctx.fillText(`all items · ${fmtYear(min)} · spaced evenly`, W/2, y0-14);
+  } else {
+    const xMin=xOf(min,0), xMax=xOf(max,items.length-1);
+    if (xMin>pad-40 && xMin<W){ ctx.textAlign="center"; ctx.fillText(fmtYear(min), Math.max(pad,xMin), y0-14); }
+    if (xMax>0 && xMax<W-pad+40){ ctx.textAlign="center"; ctx.fillText(fmtYear(max), Math.min(W-pad,xMax), y0-14); }
+  }
   if (tlZoom>1.01){ ctx.textAlign="right"; ctx.fillText(`${tlZoom.toFixed(1)}×`, W-pad, H-14); }
 }
 function roundRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
