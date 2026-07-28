@@ -281,7 +281,7 @@ let spin = !matchMedia("(prefers-reduced-motion: reduce)").matches;
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
 let W = 0, H = 0, DPR = 1;
 const cam = { rotX: -0.35, rotY: 0.5, zoom: 0.75, dist: 900 }; // orbit + perspective (default zoomed out a touch)
-let tlZoom = 1, tlPanX = 0; // timeline: scroll to zoom the time axis, drag to pan
+let tlZoom = 1, tlPanX = 0, tlPanY = 0, tlContentBottom = 0; // timeline: zoom axis, drag to pan (X + Y for tall clusters)
 
 function ingest(raw) {
   const nodesIn = Array.isArray(raw.nodes) ? raw.nodes : [];
@@ -323,7 +323,7 @@ function refreshSampleBadge(){ /* sample data removed — nothing to badge */ }
 function showMsg(text){ const e=document.getElementById("emptymsg"); if(e){ e.textContent=text; e.hidden=false; } }
 function hideMsg(){ const e=document.getElementById("emptymsg"); if(e) e.hidden=true; }
 function setData(raw) {
-  G = ingest(raw); selected = null; tlZoom = 1; tlPanX = 0; graphSample = !!(raw && raw.sample); refreshSampleBadge(); renderDetail(); updateStats();
+  G = ingest(raw); selected = null; tlZoom = 1; tlPanX = 0; tlPanY = 0; graphSample = !!(raw && raw.sample); refreshSampleBadge(); renderDetail(); updateStats();
   document.getElementById("s-nodes").textContent = G.nodes.length;
   document.getElementById("s-edges").textContent = G.edges.length;
   alpha = 1;
@@ -543,7 +543,7 @@ function drawTimeline() {
     ctx.fillText("No time-stamped events or relationships in this graph yet.", W/2, H/2-8);
     ctx.font="11px "+cssVar("--font-mono");
     ctx.fillText("Nodes or edges carrying a date appear here as a cascade.", W/2, H/2+12); return; }
-  const pad=70, y0=90, laneGap=62, lanes=5;
+  const pad=70, y0=90, laneGap=54, cardH=44, GAP=8;
   const times=items.map(d=>d.t); const min=Math.min(...times),max=Math.max(...times),span=max-min;
   // Normalized position in [0,1], then apply the timeline zoom/pan transform so
   // scroll magnifies the axis and drag scans along it. When every item shares one
@@ -551,22 +551,43 @@ function drawTimeline() {
   const uOf=(t,i)=> span>0 ? (t-min)/span : (items.length>1? i/(items.length-1):0.5);
   const xOf=(t,i)=> pad + (uOf(t,i)*(W-pad*2))*tlZoom + tlPanX;
   ctx.strokeStyle=grid; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(pad,y0); ctx.lineTo(W-pad,y0); ctx.stroke();
-  timelineItems = items.map((it,i)=>{ const x=xOf(it.t,i); const y=y0+34+(i%lanes)*laneGap;
-    const sel = selected && it.ref && it.ref.name===selected;
-    ctx.font="600 12px "+cssVar("--font-ui"); const title=clip(it.title,28);
-    const tw=Math.max(ctx.measureText(title).width, ctx.measureText(clip(it.sub,30)).width, 90)+20, h=46;
-    // At zoom 1, keep first/last cards on-canvas; when zoomed in, let them move
-    // with the pan so you can scan the axis. The connector always runs to the
-    // true time position.
+
+  // PASS 1 — geometry: axis position x, card width tw, on-canvas centre cx.
+  const laid = items.map((it,i)=>{
+    const x=xOf(it.t,i);
+    ctx.font="600 12px "+cssVar("--font-ui");
+    const tw=Math.max(ctx.measureText(clip(it.title,28)).width, ctx.measureText(clip(it.sub,30)).width, 90)+20;
     const cx = tlZoom>1.01 ? x : Math.max(pad+tw/2, Math.min(W-pad-tw/2, x));
+    return { it, x, cx, tw, h:cardH };
+  });
+  // PASS 2 — COLLISION-FREE lane packing: sort by left edge, drop each card into the
+  // first lane whose previous card ends (+GAP) before this one starts. No two cards
+  // in a lane overlap horizontally; lanes are laneGap apart (> cardH) so adjacent
+  // lanes can't overlap vertically either. This replaces the old i%5 lanes that let
+  // different-date cards collide in the same lane.
+  const order=[...laid].sort((a,b)=>(a.cx-a.tw/2)-(b.cx-b.tw/2));
+  const laneRight=[];
+  for (const c of order){
+    const left=c.cx-c.tw/2, right=c.cx+c.tw/2;
+    let lane=0; while (lane<laneRight.length && laneRight[lane]+GAP>left) lane++;
+    c.lane=lane; laneRight[lane]=right;
+  }
+  // Content height (for vertical-pan clamping) — how far the deepest lane reaches.
+  tlContentBottom = y0 + 34 + laneRight.length * laneGap + cardH;
+  clampTlPan();
+  // PASS 3 — draw each card at its packed lane (tlPanY scrolls tall clusters).
+  timelineItems = laid.map((c)=>{
+    const {it,x,cx,tw,h}=c, y=y0+34+c.lane*laneGap+tlPanY;
+    const sel = selected && it.ref && it.ref.name===selected;
     ctx.strokeStyle=grid; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x,y0); ctx.lineTo(cx,y); ctx.stroke();
     ctx.fillStyle=it.color; ctx.beginPath(); ctx.arc(x,y0,5,0,Math.PI*2); ctx.fill();
     ctx.fillStyle=cssVar("--panel"); ctx.strokeStyle=sel?accent:cssVar("--line"); ctx.lineWidth=sel?2:1;
     roundRect(cx-tw/2,y,tw,h,8); ctx.fill(); ctx.stroke();
-    ctx.fillStyle=ink; ctx.textAlign="center"; ctx.textBaseline="top"; ctx.fillText(title,cx,y+6);
-    ctx.fillStyle=inkDim; ctx.font="10px "+cssVar("--font-mono"); ctx.fillText(clip(it.sub,30),cx,y+21);
-    ctx.fillText(clip(it.date||fmtYear(it.t),22),cx,y+32);
-    return {...it, box:{x:cx-tw/2,y,w:tw,h}, dot:{x,y:y0}}; });
+    ctx.fillStyle=ink; ctx.textAlign="center"; ctx.textBaseline="top"; ctx.font="600 12px "+cssVar("--font-ui"); ctx.fillText(clip(it.title,28),cx,y+6);
+    ctx.fillStyle=inkDim; ctx.font="10px "+cssVar("--font-mono"); ctx.fillText(clip(it.sub,30),cx,y+20);
+    ctx.fillText(clip(it.date||fmtYear(it.t),22),cx,y+31);
+    return {...it, box:{x:cx-tw/2,y,w:tw,h}, dot:{x,y:y0}};
+  });
   ctx.fillStyle=inkDim; ctx.font="10px "+cssVar("--font-mono");
   if (span===0){
     // One date (or all identical): a single centered caption WITH the date — the
@@ -820,9 +841,15 @@ cv.addEventListener("pointermove",(e)=>{
     d = rotX(d, -cam.rotX); d = rotY(d, -cam.rotY);
     dragNode.x+=d.x; dragNode.y+=d.y; dragNode.z+=d.z; dragNode.vx=dragNode.vy=dragNode.vz=0; alpha=Math.max(alpha,0.4);
   } else if (view==="network" || view==="semantic"){ cam.rotY += dx*0.01; cam.rotX += dy*0.01; cam.rotX=Math.max(-1.4,Math.min(1.4,cam.rotX)); }
-  else if (view==="timeline"){ tlPanX += dx; clampTlPan(); }
+  else if (view==="timeline"){ tlPanX += dx; tlPanY += dy; clampTlPan(); }
 });
-function clampTlPan(){ const span=(W-140)*(tlZoom-1); tlPanX=Math.max(-span-40, Math.min(40, tlPanX)); }
+function clampTlPan(){
+  const span=(W-140)*(tlZoom-1); tlPanX=Math.max(-span-40, Math.min(40, tlPanX));
+  // Vertical: allow scrolling down to reach cards that a tall cluster pushed below
+  // the canvas; never past the content (or above the top).
+  const over=Math.max(0, tlContentBottom - H + 16);
+  tlPanY=Math.max(-over, Math.min(0, tlPanY));
+}
 function endDrag(e){ if (dragging && !moved){ const r=cv.getBoundingClientRect(); const nd=nodeAt(e.clientX-r.left,e.clientY-r.top);
     selected = nd ? (selKey(nd)===selected?null:selKey(nd)) : null; renderDetail(); revealDetailForSelection(); }
   dragging=false; dragNode=null; cv.classList.remove("dragging"); }
