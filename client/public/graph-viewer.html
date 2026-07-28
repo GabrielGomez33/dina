@@ -611,6 +611,14 @@ function apiHeaders(){ const h={"Content-Type":"application/json"}; const t=auth
 // researches can never bleed in.
 let RESEARCH_ID = "";
 function scoped(body){ if(RESEARCH_ID){ body.research_id=RESEARCH_ID; body.scope="island"; } return body; }
+// Lazy-load state. The embedded viewer auto-loads ONE dataset on init (from
+// ?view=). The graph feeds BOTH the Network and Timeline tabs; the semantic cloud
+// is a SEPARATE fetch (/digim/semantic). Without lazy-loading, whichever tab you
+// didn't start on stays empty — the Semantic tab in particular never fetched, so
+// it was always blank even when the research had embeddings. AUTO_FOCUS is the
+// focus term captured at init so a tab switch can fetch its data on first open.
+let AUTO_FOCUS = "";
+let graphLoaded = false, semLoaded = false, graphLoading = false, semLoading = false;
 function apiError(res){
   if(res.status===401) return new Error("Your session expired — reload the page to sign in again.");
   return new Error("API returned HTTP "+res.status);
@@ -794,7 +802,8 @@ function setView(v){ const prev=view; view=v;
   // when crossing that boundary so a stale key can't mis-highlight.
   if ((prev==="semantic") !== (v==="semantic")) { selected=null; }
   buildLegend(); updateStats(); refreshSampleBadge(); renderDetail();
-  if (v==="network") alpha=Math.max(alpha,0.5); }
+  if (v==="network") alpha=Math.max(alpha,0.5);
+  maybeAutoLoad(v); }
 document.getElementById("tab-network").onclick=()=>setView("network");
 document.getElementById("tab-timeline").onclick=()=>setView("timeline");
 document.getElementById("tab-semantic").onclick=()=>setView("semantic");
@@ -812,21 +821,51 @@ document.getElementById("modal-x").onclick=()=>modal.close();
 // the DINA domain or an API base is set; the hosted preview blocks this by CSP.
 // Shared fetch→load used by the Fetch button AND by URL-driven auto-load (when
 // the console embeds this viewer for a specific research focus).
-async function fetchAndLoad(kind, q){
+// Fetch + populate one dataset. `changeView` switches the active tab to the
+// loaded data (init + the Fetch button want this); a lazy tab-triggered load
+// passes false so it fills the tab the user just opened WITHOUT yanking the view.
+async function loadData(kind, q, changeView){
   const base=apiBase(); if(!base) throw new Error("Set an API base first (or serve this page from your DINA domain).");
   if(kind==="semantic"){
     const res=await fetch(base+"/digim/semantic",{method:"POST",headers:apiHeaders(),body:JSON.stringify(scoped({filter:q}))});
     if(!res.ok) throw apiError(res);
     const data=await res.json(); if(!Array.isArray(data.points)) throw new Error(data.message||"no points returned");
-    setSemanticData(data); setView("semantic"); buildLegend();
-    if(data.points.length===0) showMsg("No semantic points for this research yet."); else hideMsg();
+    setSemanticData(data); semLoaded=true; buildLegend();
+    if(changeView) setView("semantic");
+    if(view==="semantic"){ if(data.points.length===0) showMsg("No semantic points for this research yet."); else hideMsg(); }
   } else {
     if(!q) throw new Error("Enter a focus entity/topic for the graph (e.g. Iran).");
     const res=await fetch(base+"/digim/graph",{method:"POST",headers:apiHeaders(),body:JSON.stringify(scoped({query:q}))});
     if(!res.ok) throw apiError(res);
     const data=await res.json(); if(!Array.isArray(data.nodes)) throw new Error(data.message||"no graph returned");
-    setData(data); setView(data.suggested_view==="temporal"?"timeline":"network"); buildLegend();
-    if(data.nodes.length===0) showMsg("No relationships were extracted for this research."); else hideMsg();
+    setData(data); graphLoaded=true; buildLegend();
+    if(changeView) setView(data.suggested_view==="temporal"?"timeline":"network");
+    if(view!=="semantic"){ if(data.nodes.length===0) showMsg("No relationships were extracted for this research."); else hideMsg(); }
+  }
+}
+// Back-compat: init + the Fetch button load a dataset AND switch to its view.
+async function fetchAndLoad(kind, q){ return loadData(kind, q, true); }
+// First time a tab is opened, fetch its data if the embed hasn't loaded it yet.
+// Network + Timeline share the graph; Semantic has its own cloud. Idempotent and
+// re-entrancy-guarded so a rapid tab toggle can't fire duplicate requests.
+function maybeAutoLoad(v){
+  if(!apiBase()) return;
+  if(v==="semantic"){
+    if(semLoaded || semLoading) return;
+    if(!RESEARCH_ID && !AUTO_FOCUS) return; // nothing to scope a cloud to
+    semLoading=true;
+    showMsg("Loading this research’s semantic map…");
+    // EMPTY filter → the FULL island cloud (the whole research's embeddings).
+    // Passing the focus term here would filter the points down to a near-empty set.
+    loadData("semantic", "", false)
+      .catch((ex)=>{ if(view==="semantic") showMsg("Could not load semantic map — "+(ex.message||ex)); })
+      .finally(()=>{ semLoading=false; });
+  } else { // network or timeline → needs the graph
+    if(!AUTO_FOCUS) return;
+    if(graphLoaded || graphLoading) return; graphLoading=true;
+    loadData("graph", AUTO_FOCUS, false)
+      .catch((ex)=>{ if(view!=="semantic") showMsg("Could not load graph — "+(ex.message||ex)); })
+      .finally(()=>{ graphLoading=false; });
   }
 }
 document.getElementById("fetch-btn").onclick=async ()=>{
@@ -889,12 +928,14 @@ showMsg("No graph loaded.");
     if (p.get("embed") === "1" || p.get("embed") === "true") document.body.classList.add("embed");
     RESEARCH_ID = (p.get("research") || "").trim(); // island scope for every call
     const focus = (p.get("focus") || "").trim();
+    AUTO_FOCUS = focus; // captured so a tab switch can lazy-load its dataset
     if (focus) {
       const kind = p.get("view") === "semantic" ? "semantic" : "graph";
       const hint = document.getElementById("hint");
-      showMsg("Loading this research’s graph…");
+      showMsg(kind === "semantic" ? "Loading this research’s semantic map…" : "Loading this research’s graph…");
       if (hint) { hint.textContent = "Loading “" + focus + "”…"; hint.style.display = ""; }
-      fetchAndLoad(kind, focus)
+      // Semantic loads the FULL island cloud (empty filter); graph needs the focus.
+      fetchAndLoad(kind, kind === "semantic" ? "" : focus)
         .then(() => { if (hint) hint.textContent = "drag to orbit · scroll to zoom · click a node"; })
         .catch((ex) => { showMsg("Could not load this research’s graph — " + (ex.message || ex)); if (hint) hint.textContent = "Could not load “" + focus + "”: " + (ex.message || ex); });
     } else {
