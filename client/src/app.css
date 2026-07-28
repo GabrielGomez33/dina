@@ -195,10 +195,12 @@
 .chip:hover { color: var(--ink); border-color: var(--accent-line); }
 .sources { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 .sources.compact { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); margin-top: 12px; }
-.source { display: flex; flex-direction: column; gap: 4px; padding: 11px 13px; background: var(--panel-2); border: 1px solid var(--line);
+.source { min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 11px 13px; background: var(--panel-2); border: 1px solid var(--line);
   border-radius: var(--radius); text-decoration: none; color: var(--ink); }
 .source:hover { border-color: var(--accent-line); box-shadow: var(--glow); }
-.source-title { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* min-width:0 lets the nowrap title ellipsize inside its flex-column card instead
+   of forcing the card (and the sources grid track) to the full title width. */
+.source-title { min-width: 0; font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-host { font: 500 10px/1 var(--font-mono); color: var(--ink-faint); }
 
 /* ---- run research form ---- */
@@ -336,7 +338,13 @@
     display: block; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, 0.5);
   }
 
-  .research-layout { flex-direction: column; gap: 20px; }
+  /* align-items:stretch is CRITICAL here. The base .research-layout uses
+     align-items:flex-start; once this becomes a column, flex-start makes each
+     child shrink-to-fit its CONTENT width (a paragraph's max-content ≈ 700px),
+     overflowing the viewport and cutting off the briefing + sources. Stretch pins
+     them to the container (viewport) width so text wraps correctly. */
+  .research-layout { flex-direction: column; align-items: stretch; gap: 20px; }
+  .research-body { width: 100%; }
   .insights-rail, .insights-rail.collapsed { width: 100%; position: static; }
   .insights-rail.collapsed .insights-head { flex-direction: row; border-bottom: 0; padding: 12px 14px; }
   .insights-rail.collapsed .insights-head h2 { display: block; }
@@ -348,7 +356,7 @@
   .page { padding: 24px 18px 24px 60px; } /* keep left clearance for the ◆ toggle */
   .page-head h1 { font-size: 24px; }
   .research-head h1 { font-size: 22px; }
-  .sources, .sources.compact { grid-template-columns: 1fr; }
+  .sources, .sources.compact { grid-template-columns: minmax(0, 1fr); }
   .run-explain { grid-template-columns: 1fr; }
   .run-controls { gap: 12px; }
   .field { flex: 1 1 140px; }
